@@ -18,6 +18,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { supabase, uploadAudio } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { SaveModal } from '@/components/SaveModal'
+import { useToast } from '@/hooks/use-toast'
 
 type AudioSource = 'microphone' | 'system' | 'tab'
 
@@ -34,6 +35,7 @@ type SavedSettings = {
 export default function TranscribePage() {
   const navigate = useNavigate()
   const { user, signOut } = useAuth()
+  const { toast } = useToast()
   const {
     isConnected,
     isRecording,
@@ -189,7 +191,11 @@ export default function TranscribePage() {
 
   const handleConnect = async () => {
     if (!DEEPGRAM_API_KEY) {
-      alert('Deepgram API key not configured. Please add VITE_DEEPGRAM_API_KEY to .env')
+      toast({
+        variant: 'destructive',
+        title: 'API Key Required',
+        description: 'Deepgram API key not configured. Please add VITE_DEEPGRAM_API_KEY to .env',
+      })
       return
     }
 
@@ -337,9 +343,19 @@ export default function TranscribePage() {
       clearTranscript()
       setTranslatedText([])
       setDuration(0)
+      
+      toast({
+        variant: 'success',
+        title: 'Saved successfully',
+        description: 'Your recording has been saved.',
+      })
     } catch (err) {
       console.error('Save error:', err)
-      alert('Failed to save')
+      toast({
+        variant: 'destructive',
+        title: 'Failed to save',
+        description: 'There was an error saving your recording.',
+      })
       throw err
     } finally {
       setSaving(false)

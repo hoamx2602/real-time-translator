@@ -1,17 +1,21 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Trash2, Clock, BookOpen, Play, Pause, Volume2, Sparkles } from 'lucide-react'
+import { ArrowLeft, Trash2, Clock, BookOpen, Play, Pause, Volume2, Sparkles, Edit2, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Slider } from '@/components/ui/slider'
+import { Input } from '@/components/ui/input'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase, deleteAudio, parseTranscript, type Recording } from '@/lib/supabase'
 import { SummaryModal } from '@/components/SummaryModal'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { useToast } from '@/hooks/use-toast'
 
 export default function HistoryPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { toast } = useToast()
   const [recordings, setRecordings] = useState<Recording[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null)
@@ -19,6 +23,9 @@ export default function HistoryPage() {
   const [currentTime, setCurrentTime] = useState(0)
   const [audioDuration, setAudioDuration] = useState(0)
   const [showSummaryModal, setShowSummaryModal] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string | null }>({ open: false, id: null })
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
@@ -51,8 +58,14 @@ export default function HistoryPage() {
     setAudioDuration(0)
   }, [selectedRecording])
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this recording?')) return
+  const handleDeleteClick = (id: string) => {
+    setDeleteConfirm({ open: true, id })
+  }
+
+  const handleDelete = async () => {
+    if (!deleteConfirm.id) return
+
+    const id = deleteConfirm.id
 
     // Find the recording to delete its audio file
     const recordingToDelete = recordings.find(r => r.id === id)
@@ -72,6 +85,69 @@ export default function HistoryPage() {
       if (selectedRecording?.id === id) {
         setSelectedRecording(null)
       }
+      
+      toast({
+        variant: 'success',
+        title: 'Deleted successfully',
+        description: 'The recording has been deleted.',
+      })
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to delete',
+        description: 'There was an error deleting the recording.',
+      })
+    }
+
+    setDeleteConfirm({ open: false, id: null })
+  }
+
+  const handleStartEdit = (recording: Recording) => {
+    setEditingId(recording.id)
+    setEditTitle(recording.title)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setEditTitle('')
+  }
+
+  const handleSaveEdit = async (id: string) => {
+    if (!editTitle.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid title',
+        description: 'Title cannot be empty.',
+      })
+      return
+    }
+
+    const { error } = await supabase
+      .from('recordings')
+      .update({ title: editTitle.trim() })
+      .eq('id', id)
+
+    if (!error) {
+      setRecordings(prev =>
+        prev.map(r => r.id === id ? { ...r, title: editTitle.trim() } : r)
+      )
+      if (selectedRecording?.id === id) {
+        setSelectedRecording({ ...selectedRecording, title: editTitle.trim() })
+      }
+      setEditingId(null)
+      setEditTitle('')
+      
+      toast({
+        variant: 'success',
+        title: 'Updated successfully',
+        description: 'The recording title has been updated.',
+      })
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to update',
+        description: 'There was an error updating the recording.',
+      })
     }
   }
 
@@ -183,13 +259,56 @@ export default function HistoryPage() {
                             ? 'bg-primary/10 border border-primary'
                             : 'bg-muted/50 hover:bg-muted'
                         }`}
-                        onClick={() => setSelectedRecording(recording)}
+                        onClick={() => editingId !== recording.id && setSelectedRecording(recording)}
                       >
-                        <div className="flex justify-between items-start">
+                        <div className="flex justify-between items-start gap-2">
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-medium truncate">
-                              {recording.title}
-                            </h3>
+                            {editingId === recording.id ? (
+                              <div className="flex items-center gap-2 mb-2">
+                                <Input
+                                  value={editTitle}
+                                  onChange={(e) => setEditTitle(e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.stopPropagation()
+                                      handleSaveEdit(recording.id)
+                                    } else if (e.key === 'Escape') {
+                                      e.stopPropagation()
+                                      handleCancelEdit()
+                                    }
+                                  }}
+                                  autoFocus
+                                  className="h-8 text-sm"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleSaveEdit(recording.id)
+                                  }}
+                                >
+                                  <Check className="h-4 w-4 text-green-500" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleCancelEdit()
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <h3 className="font-medium truncate">
+                                {recording.title}
+                              </h3>
+                            )}
                             {recording.subject && (
                               <p className="text-sm text-muted-foreground flex items-center gap-1">
                                 <BookOpen className="h-3 w-3" />
@@ -203,17 +322,32 @@ export default function HistoryPage() {
                               {formatDate(recording.created_at)}
                             </p>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDelete(recording.id)
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          {editingId !== recording.id && (
+                            <div className="flex gap-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleStartEdit(recording)
+                                }}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDeleteClick(recording.id)
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -331,6 +465,18 @@ export default function HistoryPage() {
           open={showSummaryModal}
           onOpenChange={setShowSummaryModal}
           onSummaryGenerated={handleSummaryGenerated}
+        />
+
+        {/* Delete Confirm Dialog */}
+        <ConfirmDialog
+          open={deleteConfirm.open}
+          onOpenChange={(open) => setDeleteConfirm({ open, id: deleteConfirm.id })}
+          onConfirm={handleDelete}
+          title="Delete Recording"
+          description="Are you sure you want to delete this recording? This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          variant="destructive"
         />
       </div>
     </div>

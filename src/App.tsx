@@ -4,6 +4,7 @@ import TranscribePage from '@/pages/TranscribePage'
 import HistoryPage from '@/pages/HistoryPage'
 import LoginPage from '@/pages/LoginPage'
 import AdminPage from '@/pages/AdminPage'
+import { Toaster } from '@/components/ui/toaster'
 import './index.css'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -62,6 +63,7 @@ function App() {
       <AuthProvider>
         <div className="dark">
           <AppRoutes />
+          <Toaster />
         </div>
       </AuthProvider>
     </BrowserRouter>
