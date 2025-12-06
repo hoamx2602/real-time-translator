@@ -601,11 +601,11 @@ export default function TranscribePage() {
 
         {/* Transcript Panels */}
         <div className={cn(
-          "grid gap-4 flex-1 min-h-0",
+          "grid gap-4 h-[70vh]",
           enableTranslation ? "md:grid-cols-2" : "grid-cols-1"
         )}>
           {/* English Panel */}
-          <Card className="h-full border-2 shadow-lg flex flex-col">
+          <Card className="h-[70vh] border-2 shadow-lg flex flex-col">
             <CardHeader className="pb-3 border-b bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-950/20 relative">
               <CardTitle className="text-lg flex items-center gap-2">
                 <div className="p-1.5 bg-blue-500/10 rounded-lg">
@@ -753,7 +753,7 @@ export default function TranscribePage() {
 
           {/* Vietnamese Panel */}
           {enableTranslation && (
-            <Card className="h-full border-2 shadow-lg flex flex-col">
+            <Card className="h-[60vh] border-2 shadow-lg flex flex-col">
               <CardHeader className="pb-3 border-b bg-gradient-to-r from-green-50 to-transparent dark:from-green-950/20 relative">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <div className="p-1.5 bg-green-500/10 rounded-lg">
