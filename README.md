@@ -84,3 +84,87 @@ On Chrome/Edge:
 
 On Safari (iOS):
 - Share > Add to Home Screen
+
+## Deployment to Vercel
+
+### Cách 1: Deploy qua Vercel CLI
+
+1. **Cài đặt Vercel CLI** (nếu chưa có):
+```bash
+npm i -g vercel
+```
+
+2. **Đăng nhập Vercel**:
+```bash
+vercel login
+```
+
+3. **Deploy project**:
+```bash
+vercel
+```
+
+4. **Thêm Environment Variables**:
+Sau khi deploy lần đầu, thêm các biến môi trường:
+```bash
+vercel env add VITE_SUPABASE_URL
+vercel env add VITE_SUPABASE_ANON_KEY
+vercel env add VITE_DEEPGRAM_API_KEY  # Optional
+```
+
+Hoặc thêm qua Vercel Dashboard:
+- Vào project trên Vercel Dashboard
+- Settings > Environment Variables
+- Thêm các biến:
+  - `VITE_SUPABASE_URL`
+  - `VITE_SUPABASE_ANON_KEY`
+  - `VITE_DEEPGRAM_API_KEY` (optional)
+
+5. **Redeploy** sau khi thêm env vars:
+```bash
+vercel --prod
+```
+
+### Cách 2: Deploy qua GitHub (Khuyến nghị)
+
+1. **Push code lên GitHub**:
+```bash
+git add .
+git commit -m "Prepare for Vercel deployment"
+git push origin main
+```
+
+2. **Kết nối với Vercel**:
+   - Truy cập [vercel.com](https://vercel.com)
+   - Đăng nhập và chọn "Add New Project"
+   - Import repository từ GitHub
+   - Vercel sẽ tự động detect Vite project
+
+3. **Cấu hình Environment Variables**:
+   - Trong màn hình cấu hình project, thêm các biến môi trường:
+     - `VITE_SUPABASE_URL`
+     - `VITE_SUPABASE_ANON_KEY`
+     - `VITE_DEEPGRAM_API_KEY` (optional)
+   - Chọn environment: Production, Preview, Development
+
+4. **Deploy**:
+   - Click "Deploy"
+   - Vercel sẽ tự động build và deploy
+   - Mỗi lần push code mới, Vercel sẽ tự động deploy lại
+
+### Cấu hình Supabase cho Production
+
+1. **Thêm Vercel URL vào Supabase**:
+   - Vào Supabase Dashboard > Authentication > URL Configuration
+   - Thêm Vercel URL vào "Site URL" và "Redirect URLs"
+   - Format: `https://your-project.vercel.app`
+
+2. **Kiểm tra CORS settings** (nếu cần):
+   - Đảm bảo Supabase Storage bucket cho phép requests từ Vercel domain
+
+### Lưu ý
+
+- File `vercel.json` đã được tạo sẵn với cấu hình tối ưu cho PWA
+- Service Worker sẽ hoạt động đúng với cấu hình headers trong `vercel.json`
+- Tất cả routes sẽ được redirect về `index.html` để hỗ trợ React Router
+- Cache headers đã được tối ưu cho assets và service worker

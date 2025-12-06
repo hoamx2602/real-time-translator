@@ -1,4 +1,4 @@
-import { getActiveProviderConfig, type AIProvider } from './ai-config'
+import { getActiveProviderConfig } from './ai-config'
 
 export type SummaryOptions = {
   language?: 'en' | 'vi'

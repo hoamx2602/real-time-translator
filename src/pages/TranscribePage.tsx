@@ -47,7 +47,6 @@ export default function TranscribePage() {
     startRecording,
     stopRecording,
     clearTranscript,
-    getFullTranscript,
     setSelectedDeviceId,
     setAudioSource,
   } = useDeepgram()
