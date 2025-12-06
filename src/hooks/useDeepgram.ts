@@ -33,9 +33,12 @@ export function useDeepgram() {
 
   const socketRef = useRef<WebSocket | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const currentSegmentRef = useRef<{ text: string; startTime: Date } | null>(null)
   const segmentIntervalMs = 10000 // 10 seconds per segment
+  const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null)
 
   // Get available audio input devices
   const refreshAudioDevices = useCallback(async () => {
@@ -208,7 +211,11 @@ export function useDeepgram() {
 
       streamRef.current = stream
 
-      // Create MediaRecorder
+      // Reset recorded audio
+      setRecordedAudio(null)
+      audioChunksRef.current = []
+
+      // Create MediaRecorder for Deepgram (sends data frequently)
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
       })
@@ -221,6 +228,26 @@ export function useDeepgram() {
 
       mediaRecorder.start(250) // Send data every 250ms
       mediaRecorderRef.current = mediaRecorder
+
+      // Create separate MediaRecorder for saving full audio
+      const audioRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      })
+
+      audioRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      audioRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        setRecordedAudio(audioBlob)
+      }
+
+      audioRecorder.start() // Record continuously
+      audioRecorderRef.current = audioRecorder
+
       setIsRecording(true)
 
     } catch (err) {
@@ -244,6 +271,12 @@ export function useDeepgram() {
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop()
       mediaRecorderRef.current = null
+    }
+
+    // Stop audio recorder (this will trigger onstop and save the blob)
+    if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
+      audioRecorderRef.current.stop()
+      audioRecorderRef.current = null
     }
 
     if (streamRef.current) {
@@ -270,6 +303,8 @@ export function useDeepgram() {
     setTranscript([])
     setInterimText('')
     currentSegmentRef.current = null
+    setRecordedAudio(null)
+    audioChunksRef.current = []
   }, [])
 
   const getFullTranscript = useCallback(() => {
@@ -286,6 +321,7 @@ export function useDeepgram() {
     audioDevices,
     selectedDeviceId,
     audioSource,
+    recordedAudio,
     // Actions
     connect,
     disconnect,

@@ -20,5 +20,39 @@ export type Recording = {
   transcript_en: string
   transcript_vi: string | null
   duration: number
+  audio_url: string | null
   created_at: string
+}
+
+// Upload audio to Supabase Storage
+export async function uploadAudio(userId: string, audioBlob: Blob): Promise<string | null> {
+  const fileName = `${userId}/${Date.now()}.webm`
+
+  const { error } = await supabase.storage
+    .from('recordings')
+    .upload(fileName, audioBlob, {
+      contentType: 'audio/webm',
+      cacheControl: '3600',
+    })
+
+  if (error) {
+    console.error('Upload error:', error)
+    return null
+  }
+
+  const { data } = supabase.storage
+    .from('recordings')
+    .getPublicUrl(fileName)
+
+  return data.publicUrl
+}
+
+// Delete audio from Supabase Storage
+export async function deleteAudio(audioUrl: string): Promise<void> {
+  // Extract path from URL
+  const match = audioUrl.match(/recordings\/(.+)$/)
+  if (!match) return
+
+  const path = match[1]
+  await supabase.storage.from('recordings').remove([path])
 }

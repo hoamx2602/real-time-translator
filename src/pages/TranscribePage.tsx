@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Mic, Square, Trash2, Save, Settings, Languages, History, Volume2 } from 'lucide-react'
+import { Mic, Square, Trash2, Save, Settings, Languages, History, Volume2, Play, StopCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,12 +15,19 @@ import {
 } from '@/components/ui/select'
 import { useDeepgram } from '@/hooks/useDeepgram'
 import { useAuth } from '@/contexts/AuthContext'
-import { supabase } from '@/lib/supabase'
+import { supabase, uploadAudio } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
 type AudioSource = 'microphone' | 'system' | 'tab'
 
 const DEEPGRAM_API_KEY = import.meta.env.VITE_DEEPGRAM_API_KEY
+const SETTINGS_KEY = 'lecture-translator-settings'
+
+type SavedSettings = {
+  audioSource: AudioSource
+  selectedDeviceId: string
+  enableTranslation: boolean
+}
 
 export default function TranscribePage() {
   const navigate = useNavigate()
@@ -34,6 +41,7 @@ export default function TranscribePage() {
     audioDevices,
     selectedDeviceId,
     audioSource,
+    recordedAudio,
     connect,
     disconnect,
     startRecording,
@@ -51,10 +59,40 @@ export default function TranscribePage() {
   const [translatedText, setTranslatedText] = useState<string[]>([])
   const [duration, setDuration] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [isTesting, setIsTesting] = useState(false)
+  const [testAudioLevel, setTestAudioLevel] = useState(0)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollRefVi = useRef<HTMLDivElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const testStreamRef = useRef<MediaStream | null>(null)
+  const testAnalyserRef = useRef<AnalyserNode | null>(null)
+  const testAnimationRef = useRef<number | null>(null)
+
+  // Load settings from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(SETTINGS_KEY)
+    if (saved) {
+      try {
+        const settings: SavedSettings = JSON.parse(saved)
+        if (settings.audioSource) setAudioSource(settings.audioSource)
+        if (settings.selectedDeviceId) setSelectedDeviceId(settings.selectedDeviceId)
+        if (settings.enableTranslation !== undefined) setEnableTranslation(settings.enableTranslation)
+      } catch (e) {
+        console.error('Failed to load settings:', e)
+      }
+    }
+  }, [setAudioSource, setSelectedDeviceId])
+
+  // Save settings to localStorage when they change
+  useEffect(() => {
+    const settings: SavedSettings = {
+      audioSource,
+      selectedDeviceId,
+      enableTranslation,
+    }
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+  }, [audioSource, selectedDeviceId, enableTranslation])
 
   // Auto-scroll to bottom for both panels
   useEffect(() => {
@@ -157,11 +195,67 @@ export default function TranscribePage() {
     }
   }
 
+  // Microphone test functions
+  const startMicTest = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
+        }
+      })
+
+      testStreamRef.current = stream
+
+      const audioContext = new AudioContext()
+      const source = audioContext.createMediaStreamSource(stream)
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 256
+
+      source.connect(analyser)
+      testAnalyserRef.current = analyser
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+
+      const updateLevel = () => {
+        if (!testAnalyserRef.current) return
+        testAnalyserRef.current.getByteFrequencyData(dataArray)
+        const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length
+        setTestAudioLevel(average)
+        testAnimationRef.current = requestAnimationFrame(updateLevel)
+      }
+
+      updateLevel()
+      setIsTesting(true)
+    } catch (err) {
+      console.error('Mic test error:', err)
+    }
+  }
+
+  const stopMicTest = () => {
+    if (testAnimationRef.current) {
+      cancelAnimationFrame(testAnimationRef.current)
+      testAnimationRef.current = null
+    }
+    if (testStreamRef.current) {
+      testStreamRef.current.getTracks().forEach(track => track.stop())
+      testStreamRef.current = null
+    }
+    testAnalyserRef.current = null
+    setIsTesting(false)
+    setTestAudioLevel(0)
+  }
+
   const handleSave = async () => {
     if (!user) return
 
     setSaving(true)
     try {
+      // Upload audio file to Supabase Storage
+      let audioUrl: string | null = null
+      if (recordedAudio) {
+        audioUrl = await uploadAudio(user.id, recordedAudio)
+      }
+
       const { error } = await supabase.from('recordings').insert({
         user_id: user.id,
         title: sessionTitle || `Session ${new Date().toLocaleString()}`,
@@ -169,6 +263,7 @@ export default function TranscribePage() {
         transcript_en: getFullTranscript(),
         transcript_vi: enableTranslation ? translatedText.join(' ') : null,
         duration: duration,
+        audio_url: audioUrl,
       })
 
       if (error) throw error
@@ -262,26 +357,58 @@ export default function TranscribePage() {
 
               {/* Device Selection (for microphone/system) */}
               {audioSource !== 'tab' && (
-                <div>
-                  <label className="text-sm font-medium mb-2 block">
-                    Audio Device
-                  </label>
-                  <Select
-                    value={selectedDeviceId}
-                    onValueChange={setSelectedDeviceId}
-                    disabled={isRecording}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select audio device" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {audioDevices.map((device) => (
-                        <SelectItem key={device.deviceId} value={device.deviceId}>
-                          {device.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      Audio Device
+                    </label>
+                    <Select
+                      value={selectedDeviceId}
+                      onValueChange={setSelectedDeviceId}
+                      disabled={isRecording || isTesting}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select audio device" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {audioDevices.map((device) => (
+                          <SelectItem key={device.deviceId} value={device.deviceId}>
+                            {device.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Mic Test */}
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={isTesting ? stopMicTest : startMicTest}
+                      disabled={isRecording}
+                    >
+                      {isTesting ? (
+                        <>
+                          <StopCircle className="h-4 w-4 mr-2" />
+                          Stop Test
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-4 w-4 mr-2" />
+                          Test Mic
+                        </>
+                      )}
+                    </Button>
+                    {isTesting && (
+                      <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-green-500 transition-all duration-75"
+                          style={{ width: `${Math.min(100, testAudioLevel * 1.5)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

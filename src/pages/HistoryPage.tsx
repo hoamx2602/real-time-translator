@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Trash2, Clock, BookOpen } from 'lucide-react'
+import { ArrowLeft, Trash2, Clock, BookOpen, Play, Pause, Volume2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Slider } from '@/components/ui/slider'
 import { useAuth } from '@/contexts/AuthContext'
-import { supabase, type Recording } from '@/lib/supabase'
+import { supabase, deleteAudio, type Recording } from '@/lib/supabase'
 
 export default function HistoryPage() {
   const navigate = useNavigate()
@@ -13,6 +14,10 @@ export default function HistoryPage() {
   const [recordings, setRecordings] = useState<Recording[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [audioDuration, setAudioDuration] = useState(0)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -33,8 +38,22 @@ export default function HistoryPage() {
     fetchRecordings()
   }, [user])
 
+  // Stop audio when selecting a different recording
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+    setIsPlaying(false)
+    setCurrentTime(0)
+    setAudioDuration(0)
+  }, [selectedRecording])
+
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this recording?')) return
+
+    // Find the recording to delete its audio file
+    const recordingToDelete = recordings.find(r => r.id === id)
 
     const { error } = await supabase
       .from('recordings')
@@ -42,11 +61,54 @@ export default function HistoryPage() {
       .eq('id', id)
 
     if (!error) {
+      // Delete audio file from storage
+      if (recordingToDelete?.audio_url) {
+        await deleteAudio(recordingToDelete.audio_url)
+      }
+
       setRecordings(prev => prev.filter(r => r.id !== id))
       if (selectedRecording?.id === id) {
         setSelectedRecording(null)
       }
     }
+  }
+
+  const togglePlayPause = () => {
+    if (!selectedRecording?.audio_url) return
+
+    if (!audioRef.current) {
+      audioRef.current = new Audio(selectedRecording.audio_url)
+      audioRef.current.onloadedmetadata = () => {
+        setAudioDuration(audioRef.current?.duration || 0)
+      }
+      audioRef.current.ontimeupdate = () => {
+        setCurrentTime(audioRef.current?.currentTime || 0)
+      }
+      audioRef.current.onended = () => {
+        setIsPlaying(false)
+        setCurrentTime(0)
+      }
+    }
+
+    if (isPlaying) {
+      audioRef.current.pause()
+    } else {
+      audioRef.current.play()
+    }
+    setIsPlaying(!isPlaying)
+  }
+
+  const handleSeek = (value: number[]) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = value[0]
+      setCurrentTime(value[0])
+    }
+  }
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
   const formatDuration = (seconds: number) => {
@@ -157,27 +219,65 @@ export default function HistoryPage() {
             </CardHeader>
             <CardContent>
               {selectedRecording ? (
-                <ScrollArea className="h-[calc(80vh-6rem)]">
-                  <div className="space-y-6">
-                    {/* English */}
-                    <div>
-                      <h4 className="font-medium text-blue-500 mb-2">English</h4>
-                      <p className="text-sm whitespace-pre-wrap">
-                        {selectedRecording.transcript_en}
-                      </p>
+                <div className="space-y-4">
+                  {/* Audio Player */}
+                  {selectedRecording.audio_url && (
+                    <div className="bg-muted/50 p-4 rounded-lg space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={togglePlayPause}
+                          className="h-10 w-10"
+                        >
+                          {isPlaying ? (
+                            <Pause className="h-5 w-5" />
+                          ) : (
+                            <Play className="h-5 w-5" />
+                          )}
+                        </Button>
+                        <div className="flex-1">
+                          <Slider
+                            value={[currentTime]}
+                            max={audioDuration || selectedRecording.duration}
+                            step={0.1}
+                            onValueChange={handleSeek}
+                            className="cursor-pointer"
+                          />
+                        </div>
+                        <span className="text-sm text-muted-foreground min-w-[80px] text-right">
+                          {formatTime(currentTime)} / {formatTime(audioDuration || selectedRecording.duration)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Volume2 className="h-3 w-3" />
+                        <span>Audio recording available</span>
+                      </div>
                     </div>
+                  )}
 
-                    {/* Vietnamese */}
-                    {selectedRecording.transcript_vi && (
+                  <ScrollArea className="h-[calc(80vh-12rem)]">
+                    <div className="space-y-6">
+                      {/* English */}
                       <div>
-                        <h4 className="font-medium text-green-500 mb-2">Tiếng Việt</h4>
+                        <h4 className="font-medium text-blue-500 mb-2">English</h4>
                         <p className="text-sm whitespace-pre-wrap">
-                          {selectedRecording.transcript_vi}
+                          {selectedRecording.transcript_en}
                         </p>
                       </div>
-                    )}
-                  </div>
-                </ScrollArea>
+
+                      {/* Vietnamese */}
+                      {selectedRecording.transcript_vi && (
+                        <div>
+                          <h4 className="font-medium text-green-500 mb-2">Tiếng Việt</h4>
+                          <p className="text-sm whitespace-pre-wrap">
+                            {selectedRecording.transcript_vi}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground">
                   Select a recording to view transcript
