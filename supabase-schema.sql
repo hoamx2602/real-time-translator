@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS recordings (
   transcript_en TEXT NOT NULL,
   transcript_vi TEXT,
   duration INTEGER DEFAULT 0,
+  audio_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
