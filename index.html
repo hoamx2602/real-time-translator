@@ -2,8 +2,131 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Filter out Chrome extension font loading errors (must run first!)
+      (function() {
+        // Intercept console methods - wrap in try-catch to ensure it works
+        try {
+          const originalMethods = {
+            error: console.error.bind(console),
+            warn: console.warn.bind(console),
+            log: console.log.bind(console)
+          };
+
+          const shouldSuppress = function(...args) {
+            const message = args.map(arg => String(arg)).join(' ');
+            return message.includes('chrome-extension://') && 
+                   (message.includes('web_accessible_resources') || 
+                    message.includes('Denying load of chrome-extension') ||
+                    message.includes('djbbokpfbbipcdnodgadkidppckgajgp'));
+          };
+
+          // Override console methods
+          ['error', 'warn', 'log'].forEach(method => {
+            console[method] = function(...args) {
+              if (shouldSuppress(...args)) {
+                return; // Suppress Chrome extension errors
+              }
+              originalMethods[method](...args);
+            };
+          });
+        } catch (e) {
+          // Fallback if console override fails
+        }
+
+        // Block network requests to chrome-extension://
+        try {
+          if (window.fetch) {
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+              const url = args[0];
+              if (typeof url === 'string' && url.startsWith('chrome-extension://')) {
+                return Promise.reject(new Error('Blocked'));
+              }
+              return originalFetch.apply(this, args);
+            };
+          }
+
+          if (window.XMLHttpRequest) {
+            const originalOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+              if (typeof url === 'string' && url.startsWith('chrome-extension://')) {
+                return;
+              }
+              return originalOpen.apply(this, [method, url, ...rest]);
+            };
+          }
+        } catch (e) {
+          // Fallback if network interception fails
+        }
+
+        // Remove extension-injected link/style tags
+        function removeExtensionResources() {
+          try {
+            const links = document.querySelectorAll('link[href*="chrome-extension://"]');
+            links.forEach(link => link.remove());
+            
+            const styles = document.querySelectorAll('style');
+            styles.forEach(style => {
+              if (style.textContent && style.textContent.includes('chrome-extension://')) {
+                style.remove();
+              }
+            });
+          } catch (e) {
+            // Ignore errors
+          }
+        }
+
+        // Watch for dynamically added extension resources
+        function setupMutationObserver() {
+          if (!window.MutationObserver) return;
+          
+          try {
+            const observer = new MutationObserver(function(mutations) {
+              mutations.forEach(function(mutation) {
+                mutation.addedNodes.forEach(function(node) {
+                  if (node.nodeType === 1) { // Element node
+                    if (node.tagName === 'LINK' && node.href && node.href.includes('chrome-extension://')) {
+                      node.remove();
+                    }
+                    if (node.tagName === 'STYLE' && node.textContent && node.textContent.includes('chrome-extension://')) {
+                      node.remove();
+                    }
+                  }
+                });
+              });
+            });
+            
+            // Only observe if elements exist
+            if (document.head) {
+              observer.observe(document.head, { childList: true, subtree: true });
+            }
+            if (document.body) {
+              observer.observe(document.body, { childList: true, subtree: true });
+            }
+          } catch (e) {
+            // Ignore errors
+          }
+        }
+
+        // Initialize observer when DOM is ready
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function() {
+            removeExtensionResources();
+            setupMutationObserver();
+          });
+        } else {
+          // DOM already ready, but wait a tick to ensure head/body exist
+          setTimeout(function() {
+            removeExtensionResources();
+            setupMutationObserver();
+          }, 0);
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:;" />
     <title>lecture-translator-web</title>
   </head>
   <body>
