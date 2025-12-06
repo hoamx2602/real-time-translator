@@ -169,8 +169,9 @@ export function useDeepgram() {
 
   const startRecording = useCallback(async (deviceId?: string, source?: AudioSource) => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-      setError('Not connected to Deepgram')
-      return
+      const error = 'Not connected to Deepgram. WebSocket state: ' + (socketRef.current?.readyState || 'null')
+      setError(error)
+      throw new Error(error)
     }
 
     try {

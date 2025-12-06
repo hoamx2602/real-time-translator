@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { Mic, Trash2, Save, Settings, Languages, History, Volume2, Play, StopCircle, Pause } from 'lucide-react'
+import { Mic, Settings, Languages, History, Volume2, Play, StopCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
@@ -17,6 +16,7 @@ import { useDeepgram } from '@/hooks/useDeepgram'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase, uploadAudio } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { SaveModal } from '@/components/SaveModal'
 
 type AudioSource = 'microphone' | 'system' | 'tab'
 
@@ -52,14 +52,13 @@ export default function TranscribePage() {
   } = useDeepgram()
 
   const [showSettings, setShowSettings] = useState(false)
-  const [sessionTitle, setSessionTitle] = useState('')
-  const [subject, setSubject] = useState('')
   const [enableTranslation, setEnableTranslation] = useState(false)
   const [translatedText, setTranslatedText] = useState<string[]>([])
   const [duration, setDuration] = useState(0)
   const [saving, setSaving] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [testAudioLevel, setTestAudioLevel] = useState(0)
+  const [showSaveModal, setShowSaveModal] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollRefVi = useRef<HTMLDivElement>(null)
@@ -180,16 +179,37 @@ export default function TranscribePage() {
 
   const handleToggleRecording = async () => {
     if (isRecording) {
+      // Stop recording and disconnect
       stopRecording()
+      disconnect()
+      // Wait a bit for cleanup
+      await new Promise(resolve => setTimeout(resolve, 300))
+      // Show save modal if there's transcript
+      if (transcript.length > 0) {
+        setShowSaveModal(true)
+      } else {
+        // If no transcript, just clear everything
+        clearTranscript()
+        setTranslatedText([])
+        setDuration(0)
+      }
     } else {
+      // Start new recording
       if (!isConnected) {
         await handleConnect()
-        // Wait for connection
         await new Promise(resolve => setTimeout(resolve, 1000))
       }
-      await startRecording()
-      if (duration === 0) {
-        setDuration(0)
+      
+      try {
+        await startRecording()
+        if (duration === 0) {
+          setDuration(0)
+        }
+      } catch (err) {
+        console.error('Failed to start recording, attempting reconnect...', err)
+        await handleConnect()
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        await startRecording()
       }
     }
   }
@@ -244,7 +264,7 @@ export default function TranscribePage() {
     setTestAudioLevel(0)
   }
 
-  const handleSave = async () => {
+  const handleSave = async (title: string, subject: string) => {
     if (!user) return
 
     setSaving(true)
@@ -274,7 +294,7 @@ export default function TranscribePage() {
 
       const { error } = await supabase.from('recordings').insert({
         user_id: user.id,
-        title: sessionTitle || `Session ${new Date().toLocaleString()}`,
+        title: title || `Session ${new Date().toLocaleString()}`,
         subject: subject || null,
         transcript_en: transcriptEnJson,
         transcript_vi: transcriptViJson,
@@ -288,16 +308,19 @@ export default function TranscribePage() {
       clearTranscript()
       setTranslatedText([])
       setDuration(0)
-      setSessionTitle('')
-      setSubject('')
-
-      alert('Saved successfully!')
     } catch (err) {
       console.error('Save error:', err)
       alert('Failed to save')
+      throw err
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleDelete = () => {
+    clearTranscript()
+    setTranslatedText([])
+    setDuration(0)
   }
 
   const formatDuration = (seconds: number) => {
@@ -310,7 +333,7 @@ export default function TranscribePage() {
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-4">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between bg-card/50 backdrop-blur-sm rounded-lg p-4 border shadow-sm">
+        <div className="grid grid-cols-3 items-center bg-card/50 backdrop-blur-sm rounded-lg p-4 border shadow-sm">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg">
               <Mic className="h-6 w-6 text-primary" />
@@ -322,56 +345,24 @@ export default function TranscribePage() {
           </div>
           
           {/* Controls - Center */}
-          <div className="flex items-center justify-center gap-4 flex-1">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 rounded-full"
-              onClick={clearTranscript}
-              disabled={transcript.length === 0 || isRecording}
-              title="Clear transcript"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-
+          <div className="flex items-center justify-center gap-4">
             <Button
               size="lg"
               className={cn(
                 "rounded-full w-16 h-16 shadow-lg transition-all duration-300",
                 isRecording 
                   ? "bg-red-500 hover:bg-red-600 scale-110 shadow-red-500/50 animate-pulse" 
-                  : isConnected
-                  ? "bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/50"
                   : "bg-primary hover:bg-primary/90"
               )}
               onClick={handleToggleRecording}
               disabled={!DEEPGRAM_API_KEY}
-              title={
-                isRecording 
-                  ? "Stop recording" 
-                  : isConnected 
-                  ? "Resume recording" 
-                  : "Start recording"
-              }
+              title={isRecording ? "Stop recording" : "Start recording"}
             >
               {isRecording ? (
                 <StopCircle className="h-6 w-6" />
-              ) : isConnected ? (
-                <Pause className="h-6 w-6" />
               ) : (
                 <Mic className="h-6 w-6" />
               )}
-            </Button>
-
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 rounded-full"
-              onClick={handleSave}
-              disabled={transcript.length === 0 || saving || !user || isRecording}
-              title="Save recording"
-            >
-              <Save className="h-4 w-4" />
             </Button>
 
             {/* Timer */}
@@ -385,16 +376,13 @@ export default function TranscribePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50">
-              <span className={cn(
-                "w-2.5 h-2.5 rounded-full transition-all",
-                isConnected ? "bg-green-500 animate-pulse" : "bg-gray-400"
-              )} />
-              <span className="text-sm font-medium">
-                {isConnected ? 'Connected' : 'Disconnected'}
-              </span>
-            </div>
+          <div className="flex items-center justify-end gap-3">
+            {isRecording && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50">
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-sm font-medium">Recording</span>
+              </div>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -507,24 +495,6 @@ export default function TranscribePage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Session Title</label>
-                  <Input
-                    value={sessionTitle}
-                    onChange={(e) => setSessionTitle(e.target.value)}
-                    placeholder="e.g., Lecture 1"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Subject</label>
-                  <Input
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder="e.g., CS101"
-                  />
-                </div>
-              </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Switch
@@ -656,6 +626,15 @@ export default function TranscribePage() {
           )}
         </div>
       </div>
+
+      {/* Save Modal */}
+      <SaveModal
+        open={showSaveModal}
+        onOpenChange={setShowSaveModal}
+        onSave={handleSave}
+        onDelete={handleDelete}
+        saving={saving}
+      />
     </div>
   )
 }
