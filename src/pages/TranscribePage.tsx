@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Mic, Square, Trash2, Save, Settings, Languages, History, Volume2, Play, StopCircle } from 'lucide-react'
+import { Mic, Trash2, Save, Settings, Languages, History, Volume2, Play, StopCircle, Radio } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -307,30 +307,107 @@ export default function TranscribePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-6xl mx-auto space-y-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-4">
+      <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Lecture Translator</h1>
-          <div className="flex items-center gap-2">
-            <span className={cn(
-              "w-2 h-2 rounded-full",
-              isConnected ? "bg-green-500" : "bg-gray-400"
-            )} />
-            <span className="text-sm text-muted-foreground">
-              {isConnected ? 'Connected' : 'Disconnected'}
-            </span>
+        <div className="flex items-center justify-between bg-card/50 backdrop-blur-sm rounded-lg p-4 border shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Mic className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Lecture Translator</h1>
+              <p className="text-xs text-muted-foreground">Real-time transcription & translation</p>
+            </div>
+          </div>
+          
+          {/* Controls - Center */}
+          <div className="flex items-center justify-center gap-4 flex-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 rounded-full"
+              onClick={clearTranscript}
+              disabled={transcript.length === 0 || isRecording}
+              title="Clear transcript"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+
+            <div className="relative">
+              <Button
+                size="lg"
+                className={cn(
+                  "rounded-full w-16 h-16 shadow-lg transition-all duration-300",
+                  isRecording 
+                    ? "bg-red-500 hover:bg-red-600 scale-110 shadow-red-500/50" 
+                    : "bg-primary hover:bg-primary/90"
+                )}
+                onClick={handleToggleRecording}
+                disabled={!DEEPGRAM_API_KEY}
+                title={isRecording ? "Stop recording" : "Start recording"}
+              >
+                {isRecording ? (
+                  <StopCircle className="h-6 w-6" />
+                ) : (
+                  <Mic className="h-6 w-6" />
+                )}
+              </Button>
+              {isRecording && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping" />
+              )}
+            </div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 rounded-full"
+              onClick={handleSave}
+              disabled={transcript.length === 0 || saving || !user || isRecording}
+              title="Save recording"
+            >
+              <Save className="h-4 w-4" />
+            </Button>
+
+            {/* Timer */}
+            <div className="flex items-center gap-2 ml-2">
+              {isRecording && (
+                <Radio className="h-4 w-4 text-red-500 animate-pulse" />
+              )}
+              <span className={cn(
+                "text-xl font-mono font-semibold min-w-[60px]",
+                isRecording ? "text-red-500" : "text-foreground"
+              )}>
+                {formatDuration(duration)}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50">
+              <span className={cn(
+                "w-2.5 h-2.5 rounded-full transition-all",
+                isConnected ? "bg-green-500 animate-pulse" : "bg-gray-400"
+              )} />
+              <span className="text-sm font-medium">
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
             <Button
               variant="ghost"
               size="icon"
+              className="rounded-lg"
               onClick={() => navigate('/history')}
+              title="View history"
             >
               <History className="h-5 w-5" />
             </Button>
             <Button
-              variant="ghost"
+              variant={showSettings ? "secondary" : "ghost"}
               size="icon"
+              className="rounded-lg"
               onClick={() => setShowSettings(!showSettings)}
+              title="Settings"
             >
               <Settings className="h-5 w-5" />
             </Button>
@@ -482,41 +559,57 @@ export default function TranscribePage() {
           enableTranslation ? "md:grid-cols-2" : "grid-cols-1"
         )}>
           {/* English Panel */}
-          <Card className="h-[60vh]">
-            <CardHeader className="pb-2">
+          <Card className="h-[60vh] border-2 shadow-lg">
+            <CardHeader className="pb-3 border-b bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-950/20">
               <CardTitle className="text-lg flex items-center gap-2">
-                <span className="text-blue-500">English</span>
+                <div className="p-1.5 bg-blue-500/10 rounded-lg">
+                  <Languages className="h-4 w-4 text-blue-500" />
+                </div>
+                <span className="text-blue-600 dark:text-blue-400 font-semibold">English</span>
                 {isRecording && (
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <span className="ml-auto w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/50" />
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent className="h-[calc(100%-4rem)]">
+            <CardContent className="h-[calc(100%-4.5rem)] p-4">
               <div ref={scrollRef} className="h-full">
                 <ScrollArea className="h-full pr-4">
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {transcript.map((segment, i) => (
-                      <p key={i} className="text-sm">
-                        <span className="text-muted-foreground text-xs mr-2">
-                          {segment.timestamp.toLocaleTimeString()}
-                        </span>
-                        {segment.text}
-                      </p>
+                      <div key={i} className="group hover:bg-muted/50 rounded-lg p-2 transition-colors">
+                        <p className="text-sm leading-relaxed">
+                          <span className="text-muted-foreground text-xs mr-3 font-mono">
+                            {segment.timestamp.toLocaleTimeString()}
+                          </span>
+                          <span className="text-foreground">{segment.text}</span>
+                        </p>
+                      </div>
                     ))}
                     {interimText && (
-                      <p className="text-sm text-muted-foreground italic">
-                        {interimText}
-                      </p>
+                      <div className="rounded-lg p-2 bg-muted/30">
+                        <p className="text-sm text-muted-foreground italic animate-pulse">
+                          {interimText}
+                        </p>
+                      </div>
                     )}
                     {transcript.length === 0 && !interimText && !isRecording && (
-                      <p className="text-muted-foreground text-center py-8">
-                        Press the microphone to start
-                      </p>
+                      <div className="flex flex-col items-center justify-center h-full py-16">
+                        <Mic className="h-12 w-12 text-muted-foreground/30 mb-4" />
+                        <p className="text-muted-foreground text-center">
+                          Press the microphone to start
+                        </p>
+                      </div>
                     )}
                     {transcript.length === 0 && !interimText && isRecording && (
-                      <p className="text-muted-foreground text-center py-8 animate-pulse">
-                        Listening...
-                      </p>
+                      <div className="flex flex-col items-center justify-center h-full py-16">
+                        <div className="relative">
+                          <Radio className="h-12 w-12 text-red-500 animate-pulse" />
+                          <span className="absolute inset-0 w-12 h-12 bg-red-500/20 rounded-full animate-ping" />
+                        </div>
+                        <p className="text-muted-foreground text-center mt-4 animate-pulse">
+                          Listening...
+                        </p>
+                      </div>
                     )}
                   </div>
                 </ScrollArea>
@@ -526,29 +619,36 @@ export default function TranscribePage() {
 
           {/* Vietnamese Panel */}
           {enableTranslation && (
-            <Card className="h-[60vh]">
-              <CardHeader className="pb-2">
+            <Card className="h-[60vh] border-2 shadow-lg">
+              <CardHeader className="pb-3 border-b bg-gradient-to-r from-green-50 to-transparent dark:from-green-950/20">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Languages className="h-5 w-5 text-green-500" />
-                  <span className="text-green-500">Tiếng Việt</span>
+                  <div className="p-1.5 bg-green-500/10 rounded-lg">
+                    <Languages className="h-4 w-4 text-green-500" />
+                  </div>
+                  <span className="text-green-600 dark:text-green-400 font-semibold">Tiếng Việt</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="h-[calc(100%-4rem)]">
+              <CardContent className="h-[calc(100%-4.5rem)] p-4">
                 <div ref={scrollRefVi} className="h-full">
                   <ScrollArea className="h-full pr-4">
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {translatedText.map((text, i) => (
-                        <p key={i} className="text-sm">
-                          <span className="text-muted-foreground text-xs mr-2">
-                            {transcript[i]?.timestamp.toLocaleTimeString()}
-                          </span>
-                          {text}
-                        </p>
+                        <div key={i} className="group hover:bg-muted/50 rounded-lg p-2 transition-colors">
+                          <p className="text-sm leading-relaxed">
+                            <span className="text-muted-foreground text-xs mr-3 font-mono">
+                              {transcript[i]?.timestamp.toLocaleTimeString()}
+                            </span>
+                            <span className="text-foreground">{text}</span>
+                          </p>
+                        </div>
                       ))}
                       {translatedText.length === 0 && (
-                        <p className="text-muted-foreground text-center py-8">
-                          Bản dịch sẽ hiện ở đây
-                        </p>
+                        <div className="flex flex-col items-center justify-center h-full py-16">
+                          <Languages className="h-12 w-12 text-muted-foreground/30 mb-4" />
+                          <p className="text-muted-foreground text-center">
+                            Bản dịch sẽ hiện ở đây
+                          </p>
+                        </div>
                       )}
                     </div>
                   </ScrollArea>
@@ -557,53 +657,6 @@ export default function TranscribePage() {
             </Card>
           )}
         </div>
-
-        {/* Controls */}
-        <Card>
-          <CardContent className="py-4">
-            <div className="flex items-center justify-center gap-4">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={clearTranscript}
-                disabled={transcript.length === 0}
-              >
-                <Trash2 className="h-5 w-5" />
-              </Button>
-
-              <Button
-                size="lg"
-                className={cn(
-                  "rounded-full w-16 h-16",
-                  isRecording ? "bg-red-500 hover:bg-red-600" : "bg-primary"
-                )}
-                onClick={handleToggleRecording}
-                disabled={!DEEPGRAM_API_KEY}
-              >
-                {isRecording ? (
-                  <Square className="h-6 w-6" />
-                ) : (
-                  <Mic className="h-6 w-6" />
-                )}
-              </Button>
-
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleSave}
-                disabled={transcript.length === 0 || saving || !user}
-              >
-                <Save className="h-5 w-5" />
-              </Button>
-            </div>
-
-            <div className="text-center mt-2">
-              <span className="text-2xl font-mono">
-                {formatDuration(duration)}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   )

@@ -63,3 +63,4 @@ Thumbs.db
 sw.js
 workbox-*.js
 registerSW.js
+.vercel
