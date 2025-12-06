@@ -64,7 +64,7 @@ export default function HistoryPage() {
   }
 
   const handleDelete = async () => {
-    if (!deleteConfirm.id) return
+    if (!deleteConfirm.id || !user) return
 
     const id = deleteConfirm.id
 
@@ -75,6 +75,7 @@ export default function HistoryPage() {
       .from('recordings')
       .delete()
       .eq('id', id)
+      .eq('user_id', user.id)
 
     if (!error) {
       // Delete audio file from storage
@@ -114,12 +115,14 @@ export default function HistoryPage() {
   }
 
   const handleSaveEdit = async (id: string) => {
-    if (!editTitle.trim()) {
-      toast({
-        variant: 'destructive',
-        title: 'Invalid title',
-        description: 'Title cannot be empty.',
-      })
+    if (!editTitle.trim() || !user) {
+      if (!editTitle.trim()) {
+        toast({
+          variant: 'destructive',
+          title: 'Invalid title',
+          description: 'Title cannot be empty.',
+        })
+      }
       return
     }
 
@@ -127,6 +130,7 @@ export default function HistoryPage() {
       .from('recordings')
       .update({ title: editTitle.trim() })
       .eq('id', id)
+      .eq('user_id', user.id)
 
     if (!error) {
       setRecordings(prev =>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Sparkles, Loader2, Copy, Check, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { useAuth } from '@/contexts/AuthContext'
 import {
   Dialog,
   DialogContent,
@@ -30,6 +31,7 @@ type Props = {
 
 export function SummaryModal({ recording, open, onOpenChange, onSummaryGenerated }: Props) {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [summary, setSummary] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -71,10 +73,13 @@ export function SummaryModal({ recording, open, onOpenChange, onSummaryGenerated
       setSummary(generatedSummary)
 
       // Save summary to database
-      await supabase
-        .from('recordings')
-        .update({ summary: generatedSummary })
-        .eq('id', recording.id)
+      if (user) {
+        await supabase
+          .from('recordings')
+          .update({ summary: generatedSummary })
+          .eq('id', recording.id)
+          .eq('user_id', user.id)
+      }
 
       onSummaryGenerated?.(generatedSummary)
     } catch (err) {
