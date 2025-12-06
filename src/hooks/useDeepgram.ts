@@ -259,14 +259,15 @@ export function useDeepgram() {
 
   const stopRecording = useCallback(() => {
     // Flush the current segment if any
-    if (currentSegmentRef.current && currentSegmentRef.current.text.trim()) {
+    const segment = currentSegmentRef.current
+    if (segment && segment.text.trim()) {
       setTranscript(prev => [...prev, {
-        text: currentSegmentRef.current!.text,
-        timestamp: currentSegmentRef.current!.startTime,
+        text: segment.text,
+        timestamp: segment.startTime,
         isFinal: true
       }])
-      currentSegmentRef.current = null
     }
+    currentSegmentRef.current = null
 
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop()
