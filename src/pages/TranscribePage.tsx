@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Mic, Settings, Languages, History, Volume2, Play, StopCircle } from 'lucide-react'
+import { Mic, Settings, Languages, History, Volume2, Play, StopCircle, MoreVertical, Type, Palette } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
+import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
@@ -22,6 +23,7 @@ type AudioSource = 'microphone' | 'system' | 'tab'
 
 const DEEPGRAM_API_KEY = import.meta.env.VITE_DEEPGRAM_API_KEY
 const SETTINGS_KEY = 'lecture-translator-settings'
+const FONT_SETTINGS_KEY = 'lecture-translator-font-settings'
 
 type SavedSettings = {
   audioSource: AudioSource
@@ -59,6 +61,11 @@ export default function TranscribePage() {
   const [isTesting, setIsTesting] = useState(false)
   const [testAudioLevel, setTestAudioLevel] = useState(0)
   const [showSaveModal, setShowSaveModal] = useState(false)
+  const [showFontMenu, setShowFontMenu] = useState(false)
+  const [showFontMenuVi, setShowFontMenuVi] = useState(false)
+  const [fontFamily, setFontFamily] = useState('system')
+  const [fontSize, setFontSize] = useState(14)
+  const [textColor, setTextColor] = useState('#000000')
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollRefVi = useRef<HTMLDivElement>(null)
@@ -80,6 +87,19 @@ export default function TranscribePage() {
         console.error('Failed to load settings:', e)
       }
     }
+
+    // Load font settings
+    const fontSettings = localStorage.getItem(FONT_SETTINGS_KEY)
+    if (fontSettings) {
+      try {
+        const settings = JSON.parse(fontSettings)
+        if (settings.fontFamily) setFontFamily(settings.fontFamily)
+        if (settings.fontSize) setFontSize(settings.fontSize)
+        if (settings.textColor) setTextColor(settings.textColor)
+      } catch (e) {
+        console.error('Failed to load font settings:', e)
+      }
+    }
   }, [setAudioSource, setSelectedDeviceId])
 
   // Save settings to localStorage when they change
@@ -91,6 +111,15 @@ export default function TranscribePage() {
     }
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
   }, [audioSource, selectedDeviceId, enableTranslation])
+
+  // Save font settings to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem(FONT_SETTINGS_KEY, JSON.stringify({
+      fontFamily,
+      fontSize,
+      textColor,
+    }))
+  }, [fontFamily, fontSize, textColor])
 
   // Auto-scroll to bottom for both panels
   useEffect(() => {
@@ -329,6 +358,24 @@ export default function TranscribePage() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
+  // Close font menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      // Don't close if clicking inside the menu container or Select dropdown
+      if (
+        !target.closest('.font-menu-container') &&
+        !target.closest('[role="listbox"]') &&
+        !target.closest('[data-radix-popper-content-wrapper]')
+      ) {
+        setShowFontMenu(false)
+        setShowFontMenuVi(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-4">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -532,7 +579,7 @@ export default function TranscribePage() {
         )}>
           {/* English Panel */}
           <Card className="h-[60vh] border-2 shadow-lg">
-            <CardHeader className="pb-3 border-b bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-950/20">
+            <CardHeader className="pb-3 border-b bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-950/20 relative">
               <CardTitle className="text-lg flex items-center gap-2">
                 <div className="p-1.5 bg-blue-500/10 rounded-lg">
                   <Languages className="h-4 w-4 text-blue-500" />
@@ -542,28 +589,120 @@ export default function TranscribePage() {
                   <span className="ml-auto w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/50" />
                 )}
               </CardTitle>
+              <div className="absolute top-3 right-3">
+                <div className="relative font-menu-container">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setShowFontMenu(!showFontMenu)}
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                  {showFontMenu && (
+                    <div 
+                      className="absolute right-0 top-10 z-50 w-64 bg-card border rounded-lg shadow-lg p-4 space-y-4"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div>
+                        <label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                          <Type className="h-4 w-4" />
+                          Font Family
+                        </label>
+                        <Select value={fontFamily} onValueChange={setFontFamily}>
+                          <SelectTrigger onClick={(e) => e.stopPropagation()}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="system">System Default</SelectItem>
+                            <SelectItem value="serif">Serif</SelectItem>
+                            <SelectItem value="sans-serif">Sans Serif</SelectItem>
+                            <SelectItem value="monospace">Monospace</SelectItem>
+                            <SelectItem value="cursive">Cursive</SelectItem>
+                            <SelectItem value="fantasy">Fantasy</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Font Size</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range"
+                            min="10"
+                            max="24"
+                            value={fontSize}
+                            onChange={(e) => setFontSize(Number(e.target.value))}
+                            className="flex-1"
+                          />
+                          <span className="text-sm w-12 text-center">{fontSize}px</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                          <Palette className="h-4 w-4" />
+                          Text Color
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={textColor}
+                            onChange={(e) => setTextColor(e.target.value)}
+                            className="h-10 w-20 rounded border"
+                          />
+                          <Input
+                            value={textColor}
+                            onChange={(e) => setTextColor(e.target.value)}
+                            className="flex-1"
+                            placeholder="#000000"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="h-[calc(100%-4.5rem)] p-4">
               <div ref={scrollRef} className="h-full">
                 <ScrollArea className="h-full pr-4">
                   <div className="space-y-3">
-                    {transcript.map((segment, i) => (
-                      <div key={i} className="group hover:bg-muted/50 rounded-lg p-2 transition-colors">
-                        <p className="text-sm leading-relaxed">
-                          <span className="text-muted-foreground text-xs mr-3 font-mono">
-                            {segment.timestamp.toLocaleTimeString()}
-                          </span>
-                          <span className="text-foreground">{segment.text}</span>
-                        </p>
-                      </div>
-                    ))}
-                    {interimText && (
-                      <div className="rounded-lg p-2 bg-muted/30">
-                        <p className="text-sm text-muted-foreground italic animate-pulse">
-                          {interimText}
-                        </p>
-                      </div>
-                    )}
+                    {transcript.map((segment, i) => {
+                      const fontFamilyMap: Record<string, string> = {
+                        system: 'system-ui, -apple-system, sans-serif',
+                        serif: 'Georgia, serif',
+                        'sans-serif': 'Arial, Helvetica, sans-serif',
+                        monospace: 'Monaco, "Courier New", monospace',
+                        cursive: '"Comic Sans MS", cursive',
+                        fantasy: 'Impact, fantasy',
+                      }
+                      return (
+                        <div key={i} className="group hover:bg-muted/50 rounded-lg p-2 transition-colors">
+                          <p className="leading-relaxed" style={{ fontSize: `${fontSize}px`, fontFamily: fontFamilyMap[fontFamily] || fontFamilyMap.system }}>
+                            <span className="text-muted-foreground text-xs mr-3 font-mono">
+                              {segment.timestamp.toLocaleTimeString()}
+                            </span>
+                            <span style={{ color: textColor }}>{segment.text}</span>
+                          </p>
+                        </div>
+                      )
+                    })}
+                    {interimText && (() => {
+                      const fontFamilyMap: Record<string, string> = {
+                        system: 'system-ui, -apple-system, sans-serif',
+                        serif: 'Georgia, serif',
+                        'sans-serif': 'Arial, Helvetica, sans-serif',
+                        monospace: 'Monaco, "Courier New", monospace',
+                        cursive: '"Comic Sans MS", cursive',
+                        fantasy: 'Impact, fantasy',
+                      }
+                      return (
+                        <div className="group hover:bg-muted/50 rounded-lg p-2 transition-colors">
+                          <p className="leading-relaxed" style={{ fontSize: `${fontSize}px`, fontFamily: fontFamilyMap[fontFamily] || fontFamilyMap.system }}>
+                            <span style={{ color: textColor, opacity: 0.7 }}>{interimText}</span>
+                          </p>
+                        </div>
+                      )
+                    })()}
                     {transcript.length === 0 && !interimText && !isRecording && (
                       <div className="flex flex-col items-center justify-center h-full py-16">
                         <Mic className="h-12 w-12 text-muted-foreground/30 mb-4" />
@@ -588,28 +727,110 @@ export default function TranscribePage() {
           {/* Vietnamese Panel */}
           {enableTranslation && (
             <Card className="h-[60vh] border-2 shadow-lg">
-              <CardHeader className="pb-3 border-b bg-gradient-to-r from-green-50 to-transparent dark:from-green-950/20">
+              <CardHeader className="pb-3 border-b bg-gradient-to-r from-green-50 to-transparent dark:from-green-950/20 relative">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <div className="p-1.5 bg-green-500/10 rounded-lg">
                     <Languages className="h-4 w-4 text-green-500" />
                   </div>
                   <span className="text-green-600 dark:text-green-400 font-semibold">Tiếng Việt</span>
                 </CardTitle>
+                <div className="absolute top-3 right-3">
+                  <div className="relative font-menu-container">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setShowFontMenuVi(!showFontMenuVi)}
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                    {showFontMenuVi && (
+                      <div 
+                        className="absolute right-0 top-10 z-50 w-64 bg-card border rounded-lg shadow-lg p-4 space-y-4"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div>
+                          <label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                            <Type className="h-4 w-4" />
+                            Font Family
+                          </label>
+                          <Select value={fontFamily} onValueChange={setFontFamily}>
+                            <SelectTrigger onClick={(e) => e.stopPropagation()}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="system">System Default</SelectItem>
+                              <SelectItem value="serif">Serif</SelectItem>
+                              <SelectItem value="sans-serif">Sans Serif</SelectItem>
+                              <SelectItem value="monospace">Monospace</SelectItem>
+                              <SelectItem value="cursive">Cursive</SelectItem>
+                              <SelectItem value="fantasy">Fantasy</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium mb-2 block">Font Size</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min="10"
+                              max="24"
+                              value={fontSize}
+                              onChange={(e) => setFontSize(Number(e.target.value))}
+                              className="flex-1"
+                            />
+                            <span className="text-sm w-12 text-center">{fontSize}px</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                            <Palette className="h-4 w-4" />
+                            Text Color
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={textColor}
+                              onChange={(e) => setTextColor(e.target.value)}
+                              className="h-10 w-20 rounded border"
+                            />
+                            <Input
+                              value={textColor}
+                              onChange={(e) => setTextColor(e.target.value)}
+                              className="flex-1"
+                              placeholder="#000000"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="h-[calc(100%-4.5rem)] p-4">
                 <div ref={scrollRefVi} className="h-full">
                   <ScrollArea className="h-full pr-4">
                     <div className="space-y-3">
-                      {translatedText.map((text, i) => (
-                        <div key={i} className="group hover:bg-muted/50 rounded-lg p-2 transition-colors">
-                          <p className="text-sm leading-relaxed">
-                            <span className="text-muted-foreground text-xs mr-3 font-mono">
-                              {transcript[i]?.timestamp.toLocaleTimeString()}
-                            </span>
-                            <span className="text-foreground">{text}</span>
-                          </p>
-                        </div>
-                      ))}
+                      {translatedText.map((text, i) => {
+                        const fontFamilyMap: Record<string, string> = {
+                          system: 'system-ui, -apple-system, sans-serif',
+                          serif: 'Georgia, serif',
+                          'sans-serif': 'Arial, Helvetica, sans-serif',
+                          monospace: 'Monaco, "Courier New", monospace',
+                          cursive: '"Comic Sans MS", cursive',
+                          fantasy: 'Impact, fantasy',
+                        }
+                        return (
+                          <div key={i} className="group hover:bg-muted/50 rounded-lg p-2 transition-colors">
+                            <p className="leading-relaxed" style={{ fontSize: `${fontSize}px`, fontFamily: fontFamilyMap[fontFamily] || fontFamilyMap.system }}>
+                              <span className="text-muted-foreground text-xs mr-3 font-mono">
+                                {transcript[i]?.timestamp.toLocaleTimeString()}
+                              </span>
+                              <span style={{ color: textColor }}>{text}</span>
+                            </p>
+                          </div>
+                        )
+                      })}
                       {translatedText.length === 0 && (
                         <div className="flex flex-col items-center justify-center h-full py-16">
                           <Languages className="h-12 w-12 text-muted-foreground/30 mb-4" />
