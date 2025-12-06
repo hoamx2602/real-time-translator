@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 
 type DeepgramOptions = {
   language?: string
@@ -14,16 +14,63 @@ type TranscriptSegment = {
   isFinal: boolean
 }
 
+export type AudioDevice = {
+  deviceId: string
+  label: string
+}
+
+export type AudioSource = 'microphone' | 'system' | 'tab'
+
 export function useDeepgram() {
   const [isConnected, setIsConnected] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([])
   const [interimText, setInterimText] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([])
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
+  const [audioSource, setAudioSource] = useState<AudioSource>('microphone')
 
   const socketRef = useRef<WebSocket | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const currentSegmentRef = useRef<{ text: string; startTime: Date } | null>(null)
+  const segmentIntervalMs = 10000 // 10 seconds per segment
+
+  // Get available audio input devices
+  const refreshAudioDevices = useCallback(async () => {
+    try {
+      // Request permission first to get device labels
+      await navigator.mediaDevices.getUserMedia({ audio: true })
+
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const audioInputs = devices
+        .filter(device => device.kind === 'audioinput')
+        .map(device => ({
+          deviceId: device.deviceId,
+          label: device.label || `Microphone ${device.deviceId.slice(0, 8)}`
+        }))
+
+      setAudioDevices(audioInputs)
+
+      // Set default device if not selected
+      if (!selectedDeviceId && audioInputs.length > 0) {
+        setSelectedDeviceId(audioInputs[0].deviceId)
+      }
+    } catch (err) {
+      console.error('Failed to get audio devices:', err)
+    }
+  }, [selectedDeviceId])
+
+  // Refresh devices on mount and when devices change
+  useEffect(() => {
+    refreshAudioDevices()
+
+    navigator.mediaDevices.addEventListener('devicechange', refreshAudioDevices)
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', refreshAudioDevices)
+    }
+  }, [refreshAudioDevices])
 
   const connect = useCallback(async (apiKey: string, options: DeepgramOptions = {}) => {
     try {
@@ -57,16 +104,38 @@ export function useDeepgram() {
             const text = alternative.transcript
 
             if (data.is_final && text.trim()) {
-              // Final result - add to transcript
-              setTranscript(prev => [...prev, {
-                text: text.trim(),
-                timestamp: new Date(),
-                isFinal: true
-              }])
+              const now = new Date()
+
+              // Check if we should start a new segment (10 seconds elapsed)
+              if (!currentSegmentRef.current) {
+                // First segment
+                currentSegmentRef.current = { text: text.trim(), startTime: now }
+              } else {
+                const elapsed = now.getTime() - currentSegmentRef.current.startTime.getTime()
+
+                if (elapsed >= segmentIntervalMs) {
+                  // Save current segment and start new one
+                  const segmentText = currentSegmentRef.current.text
+                  const segmentTime = currentSegmentRef.current.startTime
+
+                  setTranscript(prev => [...prev, {
+                    text: segmentText,
+                    timestamp: segmentTime,
+                    isFinal: true
+                  }])
+
+                  // Start new segment
+                  currentSegmentRef.current = { text: text.trim(), startTime: now }
+                } else {
+                  // Append to current segment
+                  currentSegmentRef.current.text += ' ' + text.trim()
+                }
+              }
               setInterimText('')
             } else if (!data.is_final) {
-              // Interim result
-              setInterimText(text)
+              // Interim result - show current segment + interim
+              const currentText = currentSegmentRef.current?.text || ''
+              setInterimText(currentText ? currentText + ' ' + text : text)
             }
           }
         }
@@ -90,22 +159,52 @@ export function useDeepgram() {
     }
   }, [])
 
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (deviceId?: string, source?: AudioSource) => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
       setError('Not connected to Deepgram')
       return
     }
 
     try {
-      // Get microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          sampleRate: 16000,
-          echoCancellation: true,
-          noiseSuppression: true,
+      const targetDeviceId = deviceId || selectedDeviceId
+      const targetSource = source || audioSource
+      let stream: MediaStream
+
+      if (targetSource === 'tab') {
+        // Capture browser tab audio using getDisplayMedia
+        // This will show a picker to select which tab to capture
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true, // Required, but we won't use it
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          }
+        } as DisplayMediaStreamOptions)
+
+        // Stop video track as we only need audio
+        stream.getVideoTracks().forEach(track => track.stop())
+
+        // Check if audio track exists
+        if (stream.getAudioTracks().length === 0) {
+          throw new Error('No audio track captured. Make sure to check "Share tab audio" when selecting the tab.')
         }
-      })
+      } else {
+        // Get audio from microphone or system device (BlackHole)
+        const isSystemAudio = targetSource === 'system' || targetDeviceId?.toLowerCase().includes('blackhole')
+
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: targetDeviceId ? { exact: targetDeviceId } : undefined,
+            channelCount: 1,
+            sampleRate: 16000,
+            // Disable processing for system audio capture
+            echoCancellation: !isSystemAudio,
+            noiseSuppression: !isSystemAudio,
+            autoGainControl: !isSystemAudio,
+          }
+        })
+      }
 
       streamRef.current = stream
 
@@ -125,11 +224,23 @@ export function useDeepgram() {
       setIsRecording(true)
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to access microphone')
+      const message = err instanceof Error ? err.message : 'Failed to access audio'
+      setError(message)
+      console.error('Recording error:', err)
     }
-  }, [])
+  }, [selectedDeviceId, audioSource])
 
   const stopRecording = useCallback(() => {
+    // Flush the current segment if any
+    if (currentSegmentRef.current && currentSegmentRef.current.text.trim()) {
+      setTranscript(prev => [...prev, {
+        text: currentSegmentRef.current!.text,
+        timestamp: currentSegmentRef.current!.startTime,
+        isFinal: true
+      }])
+      currentSegmentRef.current = null
+    }
+
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop()
       mediaRecorderRef.current = null
@@ -141,6 +252,7 @@ export function useDeepgram() {
     }
 
     setIsRecording(false)
+    setInterimText('')
   }, [])
 
   const disconnect = useCallback(() => {
@@ -157,6 +269,7 @@ export function useDeepgram() {
   const clearTranscript = useCallback(() => {
     setTranscript([])
     setInterimText('')
+    currentSegmentRef.current = null
   }, [])
 
   const getFullTranscript = useCallback(() => {
@@ -170,6 +283,9 @@ export function useDeepgram() {
     transcript,
     interimText,
     error,
+    audioDevices,
+    selectedDeviceId,
+    audioSource,
     // Actions
     connect,
     disconnect,
@@ -177,5 +293,8 @@ export function useDeepgram() {
     stopRecording,
     clearTranscript,
     getFullTranscript,
+    setSelectedDeviceId,
+    setAudioSource,
+    refreshAudioDevices,
   }
 }

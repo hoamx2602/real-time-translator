@@ -1,15 +1,24 @@
 import { useState, useEffect, useRef } from 'react'
-import { Mic, Square, Trash2, Save, Settings, Languages, History } from 'lucide-react'
+import { Mic, Square, Trash2, Save, Settings, Languages, History, Volume2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useDeepgram } from '@/hooks/useDeepgram'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+
+type AudioSource = 'microphone' | 'system' | 'tab'
 
 const DEEPGRAM_API_KEY = import.meta.env.VITE_DEEPGRAM_API_KEY
 
@@ -22,12 +31,17 @@ export default function TranscribePage() {
     transcript,
     interimText,
     error,
+    audioDevices,
+    selectedDeviceId,
+    audioSource,
     connect,
     disconnect,
     startRecording,
     stopRecording,
     clearTranscript,
     getFullTranscript,
+    setSelectedDeviceId,
+    setAudioSource,
   } = useDeepgram()
 
   const [showSettings, setShowSettings] = useState(false)
@@ -39,14 +53,26 @@ export default function TranscribePage() {
   const [saving, setSaving] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollRefVi = useRef<HTMLDivElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom for both panels
   useEffect(() => {
+    // Scroll English panel
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      const scrollContainer = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight
+      }
     }
-  }, [transcript, interimText])
+    // Scroll Vietnamese panel
+    if (scrollRefVi.current) {
+      const scrollContainer = scrollRefVi.current.querySelector('[data-radix-scroll-area-viewport]')
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight
+      }
+    }
+  }, [transcript, interimText, translatedText])
 
   // Duration timer
   useEffect(() => {
@@ -207,6 +233,58 @@ export default function TranscribePage() {
               <CardTitle className="text-lg">Settings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Audio Source Type Selection */}
+              <div>
+                <label className="text-sm font-medium flex items-center gap-2 mb-2">
+                  <Volume2 className="h-4 w-4" />
+                  Audio Source Type
+                </label>
+                <Select
+                  value={audioSource}
+                  onValueChange={(value) => setAudioSource(value as AudioSource)}
+                  disabled={isRecording}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select audio source type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="microphone">Microphone</SelectItem>
+                    <SelectItem value="tab">Browser Tab (YouTube, etc.)</SelectItem>
+                    <SelectItem value="system">System Audio (BlackHole)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {audioSource === 'tab' && 'Will prompt you to select a browser tab. Check "Share tab audio" option.'}
+                  {audioSource === 'system' && 'Requires BlackHole installed. Set up Multi-Output Device in Audio MIDI Setup.'}
+                  {audioSource === 'microphone' && 'Capture audio from your microphone.'}
+                </p>
+              </div>
+
+              {/* Device Selection (for microphone/system) */}
+              {audioSource !== 'tab' && (
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Audio Device
+                  </label>
+                  <Select
+                    value={selectedDeviceId}
+                    onValueChange={setSelectedDeviceId}
+                    disabled={isRecording}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select audio device" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {audioDevices.map((device) => (
+                        <SelectItem key={device.deviceId} value={device.deviceId}>
+                          {device.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">Session Title</label>
@@ -271,28 +349,30 @@ export default function TranscribePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="h-[calc(100%-4rem)]">
-              <ScrollArea className="h-full pr-4" ref={scrollRef}>
-                <div className="space-y-2">
-                  {transcript.map((segment, i) => (
-                    <p key={i} className="text-sm">
-                      <span className="text-muted-foreground text-xs mr-2">
-                        {segment.timestamp.toLocaleTimeString()}
-                      </span>
-                      {segment.text}
-                    </p>
-                  ))}
-                  {interimText && (
-                    <p className="text-sm text-muted-foreground italic">
-                      {interimText}
-                    </p>
-                  )}
-                  {transcript.length === 0 && !interimText && (
-                    <p className="text-muted-foreground text-center py-8">
-                      {isRecording ? 'Listening...' : 'Press the microphone to start'}
-                    </p>
-                  )}
-                </div>
-              </ScrollArea>
+              <div ref={scrollRef} className="h-full">
+                <ScrollArea className="h-full pr-4">
+                  <div className="space-y-2">
+                    {transcript.map((segment, i) => (
+                      <p key={i} className="text-sm">
+                        <span className="text-muted-foreground text-xs mr-2">
+                          {segment.timestamp.toLocaleTimeString()}
+                        </span>
+                        {segment.text}
+                      </p>
+                    ))}
+                    {interimText && (
+                      <p className="text-sm text-muted-foreground italic">
+                        {interimText}
+                      </p>
+                    )}
+                    {transcript.length === 0 && !interimText && (
+                      <p className="text-muted-foreground text-center py-8">
+                        {isRecording ? 'Listening...' : 'Press the microphone to start'}
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
             </CardContent>
           </Card>
 
@@ -306,23 +386,25 @@ export default function TranscribePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="h-[calc(100%-4rem)]">
-                <ScrollArea className="h-full pr-4">
-                  <div className="space-y-2">
-                    {translatedText.map((text, i) => (
-                      <p key={i} className="text-sm">
-                        <span className="text-muted-foreground text-xs mr-2">
-                          {transcript[i]?.timestamp.toLocaleTimeString()}
-                        </span>
-                        {text}
-                      </p>
-                    ))}
-                    {translatedText.length === 0 && (
-                      <p className="text-muted-foreground text-center py-8">
-                        Bản dịch sẽ hiện ở đây
-                      </p>
-                    )}
-                  </div>
-                </ScrollArea>
+                <div ref={scrollRefVi} className="h-full">
+                  <ScrollArea className="h-full pr-4">
+                    <div className="space-y-2">
+                      {translatedText.map((text, i) => (
+                        <p key={i} className="text-sm">
+                          <span className="text-muted-foreground text-xs mr-2">
+                            {transcript[i]?.timestamp.toLocaleTimeString()}
+                          </span>
+                          {text}
+                        </p>
+                      ))}
+                      {translatedText.length === 0 && (
+                        <p className="text-muted-foreground text-center py-8">
+                          Bản dịch sẽ hiện ở đây
+                        </p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
               </CardContent>
             </Card>
           )}
