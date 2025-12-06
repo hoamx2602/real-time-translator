@@ -231,18 +231,18 @@ export default function HistoryPage() {
 
   return (
     <div className="h-full flex flex-col bg-background p-4 overflow-hidden">
-      <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 min-h-0">
+      <div className="max-w-6xl mx-auto w-full flex flex-col h-full">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-4 mb-6 shrink-0">
           <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-2xl font-bold">Recording History</h1>
         </div>
 
-        <div className={`grid gap-4 flex-1 min-h-0 transition-all ${isRecordingListCollapsed ? 'md:grid-cols-[80px_1fr]' : 'md:grid-cols-3'}`}>
+        <div className={`grid gap-4 h-[70vh] transition-all ${isRecordingListCollapsed ? 'md:grid-cols-[80px_1fr]' : 'md:grid-cols-3'}`}>
           {/* Recording List */}
-          <Card className={`flex flex-col h-full transition-all ${isRecordingListCollapsed ? 'md:col-span-1' : 'md:col-span-1'}`}>
+          <Card className={`flex flex-col h-[80vh] transition-all ${isRecordingListCollapsed ? 'md:col-span-1' : 'md:col-span-1'}`}>
             <CardHeader className="flex flex-row items-center justify-between shrink-0">
               <CardTitle className="text-lg">{isRecordingListCollapsed ? '' : 'Recordings'}</CardTitle>
               <Button
@@ -378,7 +378,7 @@ export default function HistoryPage() {
           </Card>
 
           {/* Transcript View */}
-          <Card className={`flex flex-col h-full ${isRecordingListCollapsed ? 'md:col-span-1' : 'md:col-span-2'}`}>
+          <Card className={`flex flex-col h-[80vh] ${isRecordingListCollapsed ? 'md:col-span-1' : 'md:col-span-2'}`}>
             <CardHeader className="flex flex-row items-center justify-between shrink-0">
               <CardTitle className="text-lg">
                 {selectedRecording ? selectedRecording.title : 'Select a recording'}
@@ -434,7 +434,7 @@ export default function HistoryPage() {
                     </div>
                   )}
 
-                  <ScrollArea className="flex-1 min-h-0">
+                  <ScrollArea className="flex-1 min-h-0 overflow-auto">
                     <div className="space-y-6">
                       {/* English */}
                       <div>
