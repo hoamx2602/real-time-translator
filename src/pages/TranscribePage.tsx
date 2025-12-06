@@ -159,6 +159,27 @@ export default function TranscribePage() {
     }
   }, [isRecording])
 
+  // Show save modal when recording stops and there's transcript
+  const prevIsRecordingRef = useRef(isRecording)
+  useEffect(() => {
+    // When recording stops (transitions from true to false)
+    if (prevIsRecordingRef.current && !isRecording) {
+      // Wait a bit for transcript to be fully updated and disconnect to complete
+      const timer = setTimeout(() => {
+        if (transcript.length > 0) {
+          setShowSaveModal(true)
+        } else {
+          // If no transcript, just clear everything
+          clearTranscript()
+          setTranslatedText([])
+          setDuration(0)
+        }
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+    prevIsRecordingRef.current = isRecording
+  }, [isRecording, transcript.length, clearTranscript])
+
   // Simple translation using Google Translate (free)
   const translateText = async (text: string): Promise<string> => {
     try {
@@ -215,19 +236,9 @@ export default function TranscribePage() {
   const handleToggleRecording = async () => {
     if (isRecording) {
       // Stop recording and disconnect
+      // The useEffect will handle showing the save modal
       stopRecording()
       disconnect()
-      // Wait a bit for cleanup
-      await new Promise(resolve => setTimeout(resolve, 300))
-      // Show save modal if there's transcript
-      if (transcript.length > 0) {
-        setShowSaveModal(true)
-      } else {
-        // If no transcript, just clear everything
-        clearTranscript()
-        setTranslatedText([])
-        setDuration(0)
-      }
     } else {
       // Start new recording
       if (!isConnected) {
@@ -393,8 +404,8 @@ export default function TranscribePage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-4">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="h-full flex flex-col bg-gradient-to-br from-background via-background to-muted/20 p-4 overflow-hidden">
+      <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 min-h-0 space-y-6">
         {/* Header */}
         <div className="grid grid-cols-3 items-center bg-card/50 backdrop-blur-sm rounded-lg p-4 border shadow-sm">
           <div className="flex items-center gap-3">
@@ -590,11 +601,11 @@ export default function TranscribePage() {
 
         {/* Transcript Panels */}
         <div className={cn(
-          "grid gap-4",
+          "grid gap-4 flex-1 min-h-0",
           enableTranslation ? "md:grid-cols-2" : "grid-cols-1"
         )}>
           {/* English Panel */}
-          <Card className="h-[60vh] border-2 shadow-lg">
+          <Card className="h-full border-2 shadow-lg flex flex-col">
             <CardHeader className="pb-3 border-b bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-950/20 relative">
               <CardTitle className="text-lg flex items-center gap-2">
                 <div className="p-1.5 bg-blue-500/10 rounded-lg">
@@ -678,7 +689,7 @@ export default function TranscribePage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="h-[calc(100%-4.5rem)] p-4">
+            <CardContent className="flex-1 min-h-0 p-4 overflow-hidden">
               <div ref={scrollRef} className="h-full">
                 <ScrollArea className="h-full pr-4">
                   <div className="space-y-3">
@@ -742,7 +753,7 @@ export default function TranscribePage() {
 
           {/* Vietnamese Panel */}
           {enableTranslation && (
-            <Card className="h-[60vh] border-2 shadow-lg">
+            <Card className="h-full border-2 shadow-lg flex flex-col">
               <CardHeader className="pb-3 border-b bg-gradient-to-r from-green-50 to-transparent dark:from-green-950/20 relative">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <div className="p-1.5 bg-green-500/10 rounded-lg">
@@ -823,7 +834,7 @@ export default function TranscribePage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="h-[calc(100%-4.5rem)] p-4">
+              <CardContent className="flex-1 min-h-0 p-4 overflow-hidden">
                 <div ref={scrollRefVi} className="h-full">
                   <ScrollArea className="h-full pr-4">
                     <div className="space-y-3">

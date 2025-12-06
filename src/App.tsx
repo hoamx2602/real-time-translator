@@ -4,6 +4,7 @@ import TranscribePage from '@/pages/TranscribePage'
 import HistoryPage from '@/pages/HistoryPage'
 import LoginPage from '@/pages/LoginPage'
 import AdminPage from '@/pages/AdminPage'
+import { Layout } from '@/components/Layout'
 import { Toaster } from '@/components/ui/toaster'
 import './index.css'
 
@@ -28,12 +29,21 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/login"
+        element={
+          <Layout>
+            <LoginPage />
+          </Layout>
+        }
+      />
       <Route
         path="/"
         element={
           <PrivateRoute>
-            <TranscribePage />
+            <Layout>
+              <TranscribePage />
+            </Layout>
           </PrivateRoute>
         }
       />
@@ -41,7 +51,9 @@ function AppRoutes() {
         path="/history"
         element={
           <PrivateRoute>
-            <HistoryPage />
+            <Layout>
+              <HistoryPage />
+            </Layout>
           </PrivateRoute>
         }
       />
@@ -49,7 +61,9 @@ function AppRoutes() {
         path="/admin"
         element={
           <PrivateRoute>
-            <AdminPage />
+            <Layout>
+              <AdminPage />
+            </Layout>
           </PrivateRoute>
         }
       />

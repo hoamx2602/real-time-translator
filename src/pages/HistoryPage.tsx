@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Trash2, Clock, BookOpen, Play, Pause, Volume2, Sparkles, Edit2, Check, X } from 'lucide-react'
+import { ArrowLeft, Trash2, Clock, BookOpen, Play, Pause, Volume2, Sparkles, Edit2, Check, X, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -26,6 +26,7 @@ export default function HistoryPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string | null }>({ open: false, id: null })
+  const [isRecordingListCollapsed, setIsRecordingListCollapsed] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
@@ -225,8 +226,8 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="h-full flex flex-col bg-background p-4 overflow-hidden">
+      <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 min-h-0">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
@@ -235,14 +236,26 @@ export default function HistoryPage() {
           <h1 className="text-2xl font-bold">Recording History</h1>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className={`grid gap-4 flex-1 min-h-0 transition-all ${isRecordingListCollapsed ? 'md:grid-cols-[80px_1fr]' : 'md:grid-cols-3'}`}>
           {/* Recording List */}
-          <Card className="md:col-span-1 h-[80vh]">
-            <CardHeader>
-              <CardTitle className="text-lg">Recordings</CardTitle>
+          <Card className={`flex flex-col h-full transition-all ${isRecordingListCollapsed ? 'md:col-span-1' : 'md:col-span-1'}`}>
+            <CardHeader className="flex flex-row items-center justify-between shrink-0">
+              <CardTitle className="text-lg">{isRecordingListCollapsed ? '' : 'Recordings'}</CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsRecordingListCollapsed(!isRecordingListCollapsed)}
+                className="h-8 w-8"
+              >
+                {isRecordingListCollapsed ? (
+                  <ChevronDown className="h-4 w-4 rotate-[-90deg]" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 rotate-90" />
+                )}
+              </Button>
             </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[calc(80vh-6rem)]">
+            <CardContent className={`flex-1 min-h-0 overflow-hidden p-4 ${isRecordingListCollapsed ? 'hidden' : ''}`}>
+              <ScrollArea className="h-full">
                 {loading ? (
                   <p className="text-muted-foreground text-center py-4">Loading...</p>
                 ) : recordings.length === 0 ? (
@@ -256,9 +269,12 @@ export default function HistoryPage() {
                         key={recording.id}
                         className={`p-3 rounded-lg cursor-pointer transition-colors ${
                           selectedRecording?.id === recording.id
-                            ? 'bg-primary/10 border border-primary'
+                            ? 'bg-primary/10 border-t border-l border-b border-r border-primary'
                             : 'bg-muted/50 hover:bg-muted'
                         }`}
+                        style={selectedRecording?.id === recording.id ? {
+                          borderRightWidth: '3px'
+                        } : {}}
                         onClick={() => editingId !== recording.id && setSelectedRecording(recording)}
                       >
                         <div className="flex justify-between items-start gap-2">
@@ -358,8 +374,8 @@ export default function HistoryPage() {
           </Card>
 
           {/* Transcript View */}
-          <Card className="md:col-span-2 h-[80vh]">
-            <CardHeader className="flex flex-row items-center justify-between">
+          <Card className={`flex flex-col h-full ${isRecordingListCollapsed ? 'md:col-span-1' : 'md:col-span-2'}`}>
+            <CardHeader className="flex flex-row items-center justify-between shrink-0">
               <CardTitle className="text-lg">
                 {selectedRecording ? selectedRecording.title : 'Select a recording'}
               </CardTitle>
@@ -375,12 +391,12 @@ export default function HistoryPage() {
                 </Button>
               )}
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 min-h-0 overflow-hidden flex flex-col">
               {selectedRecording ? (
-                <div className="space-y-4">
+                <div className="space-y-4 flex flex-col flex-1 min-h-0">
                   {/* Audio Player */}
                   {selectedRecording.audio_url && (
-                    <div className="bg-muted/50 p-4 rounded-lg space-y-3">
+                    <div className="bg-muted/50 p-4 rounded-lg space-y-3 shrink-0">
                       <div className="flex items-center gap-3">
                         <Button
                           variant="outline"
@@ -414,7 +430,7 @@ export default function HistoryPage() {
                     </div>
                   )}
 
-                  <ScrollArea className="h-[calc(80vh-12rem)]">
+                  <ScrollArea className="flex-1 min-h-0">
                     <div className="space-y-6">
                       {/* English */}
                       <div>
