@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Mic, Trash2, Save, Settings, Languages, History, Volume2, Play, StopCircle, Radio } from 'lucide-react'
+import { Mic, Trash2, Save, Settings, Languages, History, Volume2, Play, StopCircle, Pause } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -334,29 +334,34 @@ export default function TranscribePage() {
               <Trash2 className="h-4 w-4" />
             </Button>
 
-            <div className="relative">
-              <Button
-                size="lg"
-                className={cn(
-                  "rounded-full w-16 h-16 shadow-lg transition-all duration-300",
-                  isRecording 
-                    ? "bg-red-500 hover:bg-red-600 scale-110 shadow-red-500/50" 
-                    : "bg-primary hover:bg-primary/90"
-                )}
-                onClick={handleToggleRecording}
-                disabled={!DEEPGRAM_API_KEY}
-                title={isRecording ? "Stop recording" : "Start recording"}
-              >
-                {isRecording ? (
-                  <StopCircle className="h-6 w-6" />
-                ) : (
-                  <Mic className="h-6 w-6" />
-                )}
-              </Button>
-              {isRecording && (
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping" />
+            <Button
+              size="lg"
+              className={cn(
+                "rounded-full w-16 h-16 shadow-lg transition-all duration-300",
+                isRecording 
+                  ? "bg-red-500 hover:bg-red-600 scale-110 shadow-red-500/50 animate-pulse" 
+                  : isConnected
+                  ? "bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/50"
+                  : "bg-primary hover:bg-primary/90"
               )}
-            </div>
+              onClick={handleToggleRecording}
+              disabled={!DEEPGRAM_API_KEY}
+              title={
+                isRecording 
+                  ? "Stop recording" 
+                  : isConnected 
+                  ? "Resume recording" 
+                  : "Start recording"
+              }
+            >
+              {isRecording ? (
+                <StopCircle className="h-6 w-6" />
+              ) : isConnected ? (
+                <Pause className="h-6 w-6" />
+              ) : (
+                <Mic className="h-6 w-6" />
+              )}
+            </Button>
 
             <Button
               variant="outline"
@@ -371,9 +376,6 @@ export default function TranscribePage() {
 
             {/* Timer */}
             <div className="flex items-center gap-2 ml-2">
-              {isRecording && (
-                <Radio className="h-4 w-4 text-red-500 animate-pulse" />
-              )}
               <span className={cn(
                 "text-xl font-mono font-semibold min-w-[60px]",
                 isRecording ? "text-red-500" : "text-foreground"
@@ -602,11 +604,7 @@ export default function TranscribePage() {
                     )}
                     {transcript.length === 0 && !interimText && isRecording && (
                       <div className="flex flex-col items-center justify-center h-full py-16">
-                        <div className="relative">
-                          <Radio className="h-12 w-12 text-red-500 animate-pulse" />
-                          <span className="absolute inset-0 w-12 h-12 bg-red-500/20 rounded-full animate-ping" />
-                        </div>
-                        <p className="text-muted-foreground text-center mt-4 animate-pulse">
+                        <p className="text-muted-foreground text-center animate-pulse">
                           Listening...
                         </p>
                       </div>
