@@ -2,6 +2,7 @@
 
 Run these migrations in order in the Supabase SQL Editor.
 
+
 ## Migrations
 
 | File | Description |
