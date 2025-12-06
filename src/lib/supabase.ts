@@ -12,16 +12,33 @@ export const supabase = createClient(
   supabaseAnonKey || ''
 )
 
+export type TranscriptSegment = {
+  text: string
+  timestamp: string // ISO string
+}
+
 export type Recording = {
   id: string
   user_id: string
   title: string
   subject: string | null
-  transcript_en: string
-  transcript_vi: string | null
+  transcript_en: string // JSON string of TranscriptSegment[]
+  transcript_vi: string | null // JSON string of TranscriptSegment[] or null
   duration: number
   audio_url: string | null
+  summary: string | null
   created_at: string
+}
+
+// Helper to parse transcript JSON
+export function parseTranscript(json: string | null): TranscriptSegment[] {
+  if (!json) return []
+  try {
+    return JSON.parse(json)
+  } catch {
+    // Fallback for old format (plain text)
+    return [{ text: json, timestamp: new Date().toISOString() }]
+  }
 }
 
 // Upload audio to Supabase Storage

@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import TranscribePage from '@/pages/TranscribePage'
 import HistoryPage from '@/pages/HistoryPage'
 import LoginPage from '@/pages/LoginPage'
+import AdminPage from '@/pages/AdminPage'
 import './index.css'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -40,6 +41,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <HistoryPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <PrivateRoute>
+            <AdminPage />
           </PrivateRoute>
         }
       />

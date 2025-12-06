@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Trash2, Clock, BookOpen, Play, Pause, Volume2 } from 'lucide-react'
+import { ArrowLeft, Trash2, Clock, BookOpen, Play, Pause, Volume2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Slider } from '@/components/ui/slider'
 import { useAuth } from '@/contexts/AuthContext'
-import { supabase, deleteAudio, type Recording } from '@/lib/supabase'
+import { supabase, deleteAudio, parseTranscript, type Recording } from '@/lib/supabase'
+import { SummaryModal } from '@/components/SummaryModal'
 
 export default function HistoryPage() {
   const navigate = useNavigate()
@@ -17,6 +18,7 @@ export default function HistoryPage() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [audioDuration, setAudioDuration] = useState(0)
+  const [showSummaryModal, setShowSummaryModal] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
@@ -127,6 +129,17 @@ export default function HistoryPage() {
     })
   }
 
+  const handleSummaryGenerated = (summary: string) => {
+    // Update the recording in local state
+    if (selectedRecording) {
+      const updated = { ...selectedRecording, summary }
+      setSelectedRecording(updated)
+      setRecordings(prev =>
+        prev.map(r => r.id === updated.id ? updated : r)
+      )
+    }
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -212,10 +225,21 @@ export default function HistoryPage() {
 
           {/* Transcript View */}
           <Card className="md:col-span-2 h-[80vh]">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg">
                 {selectedRecording ? selectedRecording.title : 'Select a recording'}
               </CardTitle>
+              {selectedRecording && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSummaryModal(true)}
+                  className="gap-2"
+                >
+                  <Sparkles className="h-4 w-4 text-yellow-500" />
+                  {selectedRecording.summary ? 'View Summary' : 'AI Summary'}
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {selectedRecording ? (
@@ -260,19 +284,33 @@ export default function HistoryPage() {
                     <div className="space-y-6">
                       {/* English */}
                       <div>
-                        <h4 className="font-medium text-blue-500 mb-2">English</h4>
-                        <p className="text-sm whitespace-pre-wrap">
-                          {selectedRecording.transcript_en}
-                        </p>
+                        <h4 className="font-medium text-blue-500 mb-3">English</h4>
+                        <div className="space-y-2">
+                          {parseTranscript(selectedRecording.transcript_en).map((segment, i) => (
+                            <p key={i} className="text-sm">
+                              <span className="text-muted-foreground text-xs mr-2">
+                                {new Date(segment.timestamp).toLocaleTimeString()}
+                              </span>
+                              {segment.text}
+                            </p>
+                          ))}
+                        </div>
                       </div>
 
                       {/* Vietnamese */}
                       {selectedRecording.transcript_vi && (
                         <div>
-                          <h4 className="font-medium text-green-500 mb-2">Tiếng Việt</h4>
-                          <p className="text-sm whitespace-pre-wrap">
-                            {selectedRecording.transcript_vi}
-                          </p>
+                          <h4 className="font-medium text-green-500 mb-3">Tiếng Việt</h4>
+                          <div className="space-y-2">
+                            {parseTranscript(selectedRecording.transcript_vi).map((segment, i) => (
+                              <p key={i} className="text-sm">
+                                <span className="text-muted-foreground text-xs mr-2">
+                                  {new Date(segment.timestamp).toLocaleTimeString()}
+                                </span>
+                                {segment.text}
+                              </p>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -286,6 +324,14 @@ export default function HistoryPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Summary Modal */}
+        <SummaryModal
+          recording={selectedRecording}
+          open={showSummaryModal}
+          onOpenChange={setShowSummaryModal}
+          onSummaryGenerated={handleSummaryGenerated}
+        />
       </div>
     </div>
   )

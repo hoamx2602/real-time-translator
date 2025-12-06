@@ -256,12 +256,29 @@ export default function TranscribePage() {
         audioUrl = await uploadAudio(user.id, recordedAudio)
       }
 
+      // Format transcripts as JSON with timestamps
+      const transcriptEnJson = JSON.stringify(
+        transcript.map(s => ({
+          text: s.text,
+          timestamp: s.timestamp.toISOString()
+        }))
+      )
+
+      const transcriptViJson = enableTranslation && translatedText.length > 0
+        ? JSON.stringify(
+            translatedText.map((text, i) => ({
+              text,
+              timestamp: transcript[i]?.timestamp.toISOString() || new Date().toISOString()
+            }))
+          )
+        : null
+
       const { error } = await supabase.from('recordings').insert({
         user_id: user.id,
         title: sessionTitle || `Session ${new Date().toLocaleString()}`,
         subject: subject || null,
-        transcript_en: getFullTranscript(),
-        transcript_vi: enableTranslation ? translatedText.join(' ') : null,
+        transcript_en: transcriptEnJson,
+        transcript_vi: transcriptViJson,
         duration: duration,
         audio_url: audioUrl,
       })
@@ -492,9 +509,14 @@ export default function TranscribePage() {
                         {interimText}
                       </p>
                     )}
-                    {transcript.length === 0 && !interimText && (
+                    {transcript.length === 0 && !interimText && !isRecording && (
                       <p className="text-muted-foreground text-center py-8">
-                        {isRecording ? 'Listening...' : 'Press the microphone to start'}
+                        Press the microphone to start
+                      </p>
+                    )}
+                    {transcript.length === 0 && !interimText && isRecording && (
+                      <p className="text-muted-foreground text-center py-8 animate-pulse">
+                        Listening...
                       </p>
                     )}
                   </div>

@@ -113,6 +113,8 @@ export function useDeepgram() {
               if (!currentSegmentRef.current) {
                 // First segment
                 currentSegmentRef.current = { text: text.trim(), startTime: now }
+                // Show current segment as interim
+                setInterimText(text.trim())
               } else {
                 const elapsed = now.getTime() - currentSegmentRef.current.startTime.getTime()
 
@@ -129,13 +131,16 @@ export function useDeepgram() {
 
                   // Start new segment
                   currentSegmentRef.current = { text: text.trim(), startTime: now }
+                  // Show new segment as interim
+                  setInterimText(text.trim())
                 } else {
                   // Append to current segment
                   currentSegmentRef.current.text += ' ' + text.trim()
+                  // Update interim to show full current segment
+                  setInterimText(currentSegmentRef.current.text)
                 }
               }
-              setInterimText('')
-            } else if (!data.is_final) {
+            } else if (!data.is_final && text) {
               // Interim result - show current segment + interim
               const currentText = currentSegmentRef.current?.text || ''
               setInterimText(currentText ? currentText + ' ' + text : text)
