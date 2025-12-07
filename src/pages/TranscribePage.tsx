@@ -645,7 +645,7 @@ export default function TranscribePage() {
           enableTranslation ? "md:grid-cols-2" : "grid-cols-1"
         )}>
           {/* English Panel */}
-          <Card className="h-full border-2 shadow-lg flex flex-col">
+          <Card className="flex flex-col border-2 shadow-lg flex-1 min-h-0">
             <CardHeader className="pb-3 border-b bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-950/20 relative">
               <CardTitle className="text-lg flex items-center gap-2">
                 <div className="p-1.5 bg-blue-500/10 rounded-lg">
@@ -711,7 +711,7 @@ export default function TranscribePage() {
             </CardHeader>
             <CardContent className="flex-1 min-h-0 p-4 overflow-hidden">
               <div ref={scrollRef} className="h-full">
-                <ScrollArea className="h-full pr-4">
+                <ScrollArea className="h-full">
                   <div className="space-y-3">
                     {transcript.map((segment, i) => {
                       const fontFamilyMap: Record<string, string> = {
@@ -773,7 +773,7 @@ export default function TranscribePage() {
 
           {/* Vietnamese Panel */}
           {enableTranslation && (
-            <Card className="h-full border-2 shadow-lg flex flex-col">
+            <Card className="flex flex-col border-2 shadow-lg flex-1 min-h-0">
               <CardHeader className="pb-3 border-b bg-gradient-to-r from-green-50 to-transparent dark:from-green-950/20 relative">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <div className="p-1.5 bg-green-500/10 rounded-lg">
@@ -836,7 +836,7 @@ export default function TranscribePage() {
               </CardHeader>
               <CardContent className="flex-1 min-h-0 p-4 overflow-hidden">
                 <div ref={scrollRefVi} className="h-full">
-                  <ScrollArea className="h-full pr-4">
+                  <ScrollArea className="h-full">
                     <div className="space-y-3">
                       {translatedText.map((text, i) => {
                         const fontFamilyMap: Record<string, string> = {
