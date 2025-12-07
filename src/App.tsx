@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import TranscribePage from '@/pages/TranscribePage'
@@ -6,6 +7,7 @@ import LoginPage from '@/pages/LoginPage'
 import AdminPage from '@/pages/AdminPage'
 import { Layout } from '@/components/Layout'
 import { Toaster } from '@/components/ui/toaster'
+import { getStoredTheme, applyTheme } from '@/lib/theme-config'
 import './index.css'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -72,6 +74,12 @@ function AppRoutes() {
 }
 
 function App() {
+  // Apply saved theme on app load
+  useEffect(() => {
+    const savedTheme = getStoredTheme()
+    applyTheme(savedTheme)
+  }, [])
+
   return (
     <BrowserRouter>
       <AuthProvider>

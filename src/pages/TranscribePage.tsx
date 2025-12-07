@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { Mic, Settings, Languages, History, Volume2, Play, StopCircle, MoreVertical, Type, Palette } from 'lucide-react'
+import { Mic, Settings, Languages, History, Volume2, Play, StopCircle, MoreVertical, Type } from 'lucide-react'
+import { ThemeSelector } from '@/components/ThemeSelector'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -67,7 +68,7 @@ export default function TranscribePage() {
   const [showFontMenuVi, setShowFontMenuVi] = useState(false)
   const [fontFamily, setFontFamily] = useState('system')
   const [fontSize, setFontSize] = useState(14)
-  const [textColor, setTextColor] = useState('#000000')
+  const [totalRecordedHours, setTotalRecordedHours] = useState(0)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollRefVi = useRef<HTMLDivElement>(null)
@@ -75,6 +76,7 @@ export default function TranscribePage() {
   const testStreamRef = useRef<MediaStream | null>(null)
   const testAnalyserRef = useRef<AnalyserNode | null>(null)
   const testAnimationRef = useRef<number | null>(null)
+  const settingsRef = useRef<HTMLDivElement>(null)
 
   // Load settings from localStorage
   useEffect(() => {
@@ -97,12 +99,32 @@ export default function TranscribePage() {
         const settings = JSON.parse(fontSettings)
         if (settings.fontFamily) setFontFamily(settings.fontFamily)
         if (settings.fontSize) setFontSize(settings.fontSize)
-        if (settings.textColor) setTextColor(settings.textColor)
       } catch (e) {
         console.error('Failed to load font settings:', e)
       }
     }
   }, [setAudioSource, setSelectedDeviceId])
+
+  // Fetch total recorded hours
+  useEffect(() => {
+    const fetchTotalHours = async () => {
+      if (!user) return
+      try {
+        const { data } = await supabase
+          .from('recordings')
+          .select('duration')
+          .eq('user_id', user.id)
+
+        if (data) {
+          const totalSeconds = data.reduce((acc, r) => acc + (r.duration || 0), 0)
+          setTotalRecordedHours(totalSeconds / 3600)
+        }
+      } catch (err) {
+        console.error('Failed to fetch total hours:', err)
+      }
+    }
+    fetchTotalHours()
+  }, [user])
 
   // Save settings to localStorage when they change
   useEffect(() => {
@@ -119,9 +141,8 @@ export default function TranscribePage() {
     localStorage.setItem(FONT_SETTINGS_KEY, JSON.stringify({
       fontFamily,
       fontSize,
-      textColor,
     }))
-  }, [fontFamily, fontSize, textColor])
+  }, [fontFamily, fontSize])
 
   // Auto-scroll to bottom for both panels
   useEffect(() => {
@@ -385,7 +406,7 @@ export default function TranscribePage() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  // Close font menu when clicking outside
+  // Close popups when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement
@@ -398,6 +419,15 @@ export default function TranscribePage() {
         setShowFontMenu(false)
         setShowFontMenuVi(false)
       }
+      // Close settings popup
+      if (
+        settingsRef.current &&
+        !settingsRef.current.contains(target) &&
+        !target.closest('[role="listbox"]') &&
+        !target.closest('[data-radix-popper-content-wrapper]')
+      ) {
+        setShowSettings(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -407,7 +437,7 @@ export default function TranscribePage() {
     <div className="h-full flex flex-col bg-gradient-to-br from-background via-background to-muted/20 p-4 overflow-hidden">
       <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 min-h-0 space-y-6">
         {/* Header */}
-        <div className="grid grid-cols-3 items-center bg-card/50 backdrop-blur-sm rounded-lg p-4 border shadow-sm">
+        <div className="relative z-20 grid grid-cols-3 items-center bg-card/50 backdrop-blur-sm rounded-lg p-4 border shadow-sm">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg">
               <Mic className="h-6 w-6 text-primary" />
@@ -457,133 +487,144 @@ export default function TranscribePage() {
                 <span className="text-sm font-medium">Recording</span>
               </div>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-lg"
-              onClick={() => navigate('/history')}
-              title="View history"
-            >
-              <History className="h-5 w-5" />
-            </Button>
-            <Button
-              variant={showSettings ? "secondary" : "ghost"}
-              size="icon"
-              className="rounded-lg"
-              onClick={() => setShowSettings(!showSettings)}
-              title="Settings"
-            >
-              <Settings className="h-5 w-5" />
-            </Button>
-          </div>
-        </div>
+            <ThemeSelector />
+            <div className="relative" ref={settingsRef}>
+              <Button
+                variant={showSettings ? "secondary" : "ghost"}
+                size="icon"
+                className="rounded-lg"
+                onClick={() => setShowSettings(!showSettings)}
+                title="Settings"
+              >
+                <Settings className="h-5 w-5" />
+              </Button>
 
-        {/* Settings Panel */}
-        {showSettings && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Settings</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Audio Source Type Selection */}
-              <div>
-                <label className="text-sm font-medium flex items-center gap-2 mb-2">
-                  <Volume2 className="h-4 w-4" />
-                  Audio Source Type
-                </label>
-                <Select
-                  value={audioSource}
-                  onValueChange={(value) => setAudioSource(value as AudioSource)}
-                  disabled={isRecording}
+              {/* Settings Popup */}
+              {showSettings && (
+                <div
+                  className="absolute right-0 top-12 z-[100] w-80 bg-card border rounded-lg shadow-xl p-4 space-y-4"
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select audio source type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="microphone">Microphone</SelectItem>
-                    <SelectItem value="tab">Browser Tab (YouTube, etc.)</SelectItem>
-                    <SelectItem value="system">System Audio (BlackHole)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {audioSource === 'tab' && 'Will prompt you to select a browser tab. Check "Share tab audio" option.'}
-                  {audioSource === 'system' && 'Requires BlackHole installed. Set up Multi-Output Device in Audio MIDI Setup.'}
-                  {audioSource === 'microphone' && 'Capture audio from your microphone.'}
-                </p>
-              </div>
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <span className="text-sm font-semibold text-foreground">Settings</span>
+                  </div>
 
-              {/* Device Selection (for microphone/system) */}
-              {audioSource !== 'tab' && (
-                <div className="space-y-3">
+                  {/* Audio Source Type Selection */}
                   <div>
-                    <label className="text-sm font-medium mb-2 block">
-                      Audio Device
+                    <label className="text-sm font-medium flex items-center gap-2 mb-2">
+                      <Volume2 className="h-4 w-4" />
+                      Audio Source
                     </label>
                     <Select
-                      value={selectedDeviceId}
-                      onValueChange={setSelectedDeviceId}
-                      disabled={isRecording || isTesting}
+                      value={audioSource}
+                      onValueChange={(value) => setAudioSource(value as AudioSource)}
+                      disabled={isRecording}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select audio device" />
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select audio source type" />
                       </SelectTrigger>
                       <SelectContent>
-                        {audioDevices.map((device) => (
-                          <SelectItem key={device.deviceId} value={device.deviceId}>
-                            {device.label}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="microphone">Microphone</SelectItem>
+                        <SelectItem value="tab">Browser Tab</SelectItem>
+                        <SelectItem value="system">System Audio</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {/* Mic Test */}
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={isTesting ? stopMicTest : startMicTest}
-                      disabled={isRecording}
-                    >
-                      {isTesting ? (
-                        <>
-                          <StopCircle className="h-4 w-4 mr-2" />
-                          Stop Test
-                        </>
-                      ) : (
-                        <>
-                          <Play className="h-4 w-4 mr-2" />
-                          Test Mic
-                        </>
-                      )}
-                    </Button>
-                    {isTesting && (
-                      <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-green-500 transition-all duration-75"
-                          style={{ width: `${Math.min(100, testAudioLevel * 1.5)}%` }}
-                        />
+                  {/* Device Selection (for microphone/system) */}
+                  {audioSource !== 'tab' && (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
+                          Audio Device
+                        </label>
+                        <Select
+                          value={selectedDeviceId}
+                          onValueChange={setSelectedDeviceId}
+                          disabled={isRecording || isTesting}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Select device" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {audioDevices.map((device) => (
+                              <SelectItem key={device.deviceId} value={device.deviceId}>
+                                {device.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                    )}
+
+                      {/* Mic Test */}
+                      <div className="flex items-center gap-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={isTesting ? stopMicTest : startMicTest}
+                          disabled={isRecording}
+                        >
+                          {isTesting ? (
+                            <>
+                              <StopCircle className="h-4 w-4 mr-2" />
+                              Stop
+                            </>
+                          ) : (
+                            <>
+                              <Play className="h-4 w-4 mr-2" />
+                              Test
+                            </>
+                          )}
+                        </Button>
+                        {isTesting && (
+                          <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-green-500 transition-all duration-75"
+                              style={{ width: `${Math.min(100, testAudioLevel * 1.5)}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={enableTranslation}
+                        onCheckedChange={setEnableTranslation}
+                      />
+                      <label className="text-sm">Translate to Vietnamese</label>
+                    </div>
                   </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-between"
+                    onClick={() => {
+                      setShowSettings(false)
+                      navigate('/history')
+                    }}
+                  >
+                    <span className="flex items-center gap-2">
+                      <History className="h-4 w-4" />
+                      View History
+                    </span>
+                    <span className="text-muted-foreground">
+                      {totalRecordedHours < 1
+                        ? `${Math.round(totalRecordedHours * 60)}m`
+                        : `${totalRecordedHours.toFixed(1)}h`}
+                    </span>
+                  </Button>
+
+                  <Button variant="outline" size="sm" className="w-full" onClick={signOut}>
+                    Sign Out
+                  </Button>
                 </div>
               )}
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={enableTranslation}
-                    onCheckedChange={setEnableTranslation}
-                  />
-                  <label className="text-sm">Translate to Vietnamese</label>
-                </div>
-                <Button variant="outline" size="sm" onClick={signOut}>
-                  Sign Out
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          </div>
+        </div>
 
         {/* Error */}
         {error && (
@@ -601,11 +642,11 @@ export default function TranscribePage() {
 
         {/* Transcript Panels */}
         <div className={cn(
-          "grid gap-4 h-[70vh]",
+          "grid gap-4 flex-1 min-h-0",
           enableTranslation ? "md:grid-cols-2" : "grid-cols-1"
         )}>
           {/* English Panel */}
-          <Card className="h-[70vh] border-2 shadow-lg flex flex-col">
+          <Card className="h-full border-2 shadow-lg flex flex-col">
             <CardHeader className="pb-3 border-b bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-950/20 relative">
               <CardTitle className="text-lg flex items-center gap-2">
                 <div className="p-1.5 bg-blue-500/10 rounded-lg">
@@ -664,27 +705,7 @@ export default function TranscribePage() {
                           <span className="text-sm w-12 text-center">{fontSize}px</span>
                         </div>
                       </div>
-                      <div>
-                        <label className="text-sm font-medium mb-2 block flex items-center gap-2">
-                          <Palette className="h-4 w-4" />
-                          Text Color
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={textColor}
-                            onChange={(e) => setTextColor(e.target.value)}
-                            className="h-10 w-20 rounded border"
-                          />
-                          <Input
-                            value={textColor}
-                            onChange={(e) => setTextColor(e.target.value)}
-                            className="flex-1"
-                            placeholder="#000000"
-                          />
-                        </div>
                       </div>
-                    </div>
                   )}
                 </div>
               </div>
@@ -708,7 +729,7 @@ export default function TranscribePage() {
                             <span className="text-muted-foreground text-xs mr-3 font-mono">
                               {segment.timestamp.toLocaleTimeString()}
                             </span>
-                            <span style={{ color: textColor }}>{segment.text}</span>
+                            <span className="text-foreground">{segment.text}</span>
                           </p>
                         </div>
                       )
@@ -725,7 +746,7 @@ export default function TranscribePage() {
                       return (
                         <div className="group hover:bg-muted/50 rounded-lg p-2 transition-colors">
                           <p className="leading-relaxed" style={{ fontSize: `${fontSize}px`, fontFamily: fontFamilyMap[fontFamily] || fontFamilyMap.system }}>
-                            <span style={{ color: textColor, opacity: 0.7 }}>{interimText}</span>
+                            <span className="text-foreground/70">{interimText}</span>
                           </p>
                         </div>
                       )
@@ -753,7 +774,7 @@ export default function TranscribePage() {
 
           {/* Vietnamese Panel */}
           {enableTranslation && (
-            <Card className="h-[60vh] border-2 shadow-lg flex flex-col">
+            <Card className="h-full border-2 shadow-lg flex flex-col">
               <CardHeader className="pb-3 border-b bg-gradient-to-r from-green-50 to-transparent dark:from-green-950/20 relative">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <div className="p-1.5 bg-green-500/10 rounded-lg">
@@ -809,27 +830,7 @@ export default function TranscribePage() {
                             <span className="text-sm w-12 text-center">{fontSize}px</span>
                           </div>
                         </div>
-                        <div>
-                          <label className="text-sm font-medium mb-2 block flex items-center gap-2">
-                            <Palette className="h-4 w-4" />
-                            Text Color
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="color"
-                              value={textColor}
-                              onChange={(e) => setTextColor(e.target.value)}
-                              className="h-10 w-20 rounded border"
-                            />
-                            <Input
-                              value={textColor}
-                              onChange={(e) => setTextColor(e.target.value)}
-                              className="flex-1"
-                              placeholder="#000000"
-                            />
-                          </div>
                         </div>
-                      </div>
                     )}
                   </div>
                 </div>
@@ -853,7 +854,7 @@ export default function TranscribePage() {
                               <span className="text-muted-foreground text-xs mr-3 font-mono">
                                 {transcript[i]?.timestamp.toLocaleTimeString()}
                               </span>
-                              <span style={{ color: textColor }}>{text}</span>
+                              <span className="text-foreground">{text}</span>
                             </p>
                           </div>
                         )
