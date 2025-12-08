@@ -68,6 +68,7 @@ export default function TranscribePage() {
   const [fontFamily, setFontFamily] = useState('system')
   const [fontSize, setFontSize] = useState(14)
   const [totalRecordedHours, setTotalRecordedHours] = useState(0)
+  const [interimTranslation, setInterimTranslation] = useState('')
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollRefVi = useRef<HTMLDivElement>(null)
@@ -159,7 +160,7 @@ export default function TranscribePage() {
         scrollContainer.scrollTop = scrollContainer.scrollHeight
       }
     }
-  }, [transcript, interimText, translatedText])
+  }, [transcript, interimText, translatedText, interimTranslation])
 
   // Duration timer
   useEffect(() => {
@@ -229,6 +230,21 @@ export default function TranscribePage() {
 
     translateNew()
   }, [transcript, enableTranslation, translatedText.length])
+
+  // Realtime translation for interim text with debounce
+  useEffect(() => {
+    if (!enableTranslation || !interimText) {
+      setInterimTranslation('')
+      return
+    }
+
+    const debounceTimer = setTimeout(async () => {
+      const translated = await translateText(interimText)
+      setInterimTranslation(translated)
+    }, 300)
+
+    return () => clearTimeout(debounceTimer)
+  }, [interimText, enableTranslation])
 
   const handleConnect = async () => {
     if (!DEEPGRAM_API_KEY) {
@@ -858,7 +874,24 @@ export default function TranscribePage() {
                           </div>
                         )
                       })}
-                      {translatedText.length === 0 && (
+                      {interimTranslation && (() => {
+                        const fontFamilyMap: Record<string, string> = {
+                          system: 'system-ui, -apple-system, sans-serif',
+                          serif: 'Georgia, serif',
+                          'sans-serif': 'Arial, Helvetica, sans-serif',
+                          monospace: 'Monaco, "Courier New", monospace',
+                          cursive: '"Comic Sans MS", cursive',
+                          fantasy: 'Impact, fantasy',
+                        }
+                        return (
+                          <div className="group hover:bg-muted/50 rounded-lg p-2 transition-colors">
+                            <p className="leading-relaxed" style={{ fontSize: `${fontSize}px`, fontFamily: fontFamilyMap[fontFamily] || fontFamilyMap.system }}>
+                              <span className="text-foreground/70">{interimTranslation}</span>
+                            </p>
+                          </div>
+                        )
+                      })()}
+                      {translatedText.length === 0 && !interimTranslation && (
                         <div className="flex flex-col items-center justify-center h-full py-16">
                           <Languages className="h-12 w-12 text-muted-foreground/30 mb-4" />
                           <p className="text-muted-foreground text-center">
